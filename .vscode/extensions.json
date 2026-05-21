@@ -1,1 +1,6 @@
-{ "recommendations": ["expo.vscode-expo-tools"] }
+{
+  "recommendations": [
+    "expo.vscode-expo-tools",
+    "editorconfig.editorconfig",
+    "esbenp.prettier-vscode"
+    ] }
