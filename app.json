@@ -7,11 +7,16 @@
     "icon": "./assets/images/icon.png",
     "scheme": "unitedtransit",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.UnitedTransit",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "This app uses your location to show nearby transit options."
+      }
     },
     "android": {
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,14 +24,25 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.UnitedTransit",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAD6tjd5XkIJJLPsYXXVWS4evHVPY18FQE",
+          "playServicesVersion": "18.2.0"
+        }
+      }
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+    "developmentClient": {
+      "silentLaunch": true
+    },
     "plugins": [
       "expo-router",
+      "expo-location",
       [
         "expo-splash-screen",
         {
