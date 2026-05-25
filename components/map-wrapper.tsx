@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Platform, StyleSheet, View, ActivityIndicator } from 'react-native';
-import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 
 export default function MapWrapper() {
   const [location, setLocation] = useState({ latitude: 37.78825, longitude: -122.4324 });
