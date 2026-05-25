@@ -1,0 +1,231 @@
+name: 'Test'
+
+# the conditions that actually trigger the execution of the jobs
+on:
+  # manually trigger in github web ui
+  workflow_dispatch:
+  # any pull request targeting main we want to test, so that
+  # the code we merge in, is not butt poo
+  pull_request:
+    branches:
+      - main
+  # if we push DIRECTLY to main, we still want to test,
+  # again so that the code in main is not butt poo
+  push:
+    branches:
+      - main
+
+jobs:
+  #   web-server-test: # name of the job
+  #     runs-on: ubuntu-latest
+  #     steps:
+  #       - name: Checkout Code # basically runs git clone
+  #         uses: actions/checkout@v6
+  #         with:
+  #           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+  #           fetch-depth: 0
+
+  #       - name: Run Tests
+  #         run: npm run test
+
+  #   ios-test:
+  #     runs-on: macos-latest
+  #     steps:
+  #       - name: Checkout Code # basically runs git clone
+  #         uses: actions/checkout@v6
+  #         with:
+  #           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+  #           fetch-depth: 0
+
+  #   android-test:
+  #     runs-on: ubuntu-latest
+  #     steps:
+  #       - name: Checkout Code # basically runs git clone
+  #         uses: actions/checkout@v6
+  #         with:
+  #           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+  #           fetch-depth: 0
+
+  #   website-test:
+  #     runs-on: ubuntu-latest
+  #     steps:
+  #       - name: Checkout Code # basically runs git clone
+  #         uses: actions/checkout@v6
+  #         with:
+  #           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+  #           fetch-depth: 0
+
+  # This is one job, does some LLM analysis, might as well
+  llm-analysis: # name of another job
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true # It can fail, doesn't matter much
+    permissions:
+      contents: read # Be able to actually read / checkout the repo
+      pull-requests: write # Be able to post comments
+    concurrency:
+      group: llm-analysis
+      cancel-in-progress: false
+    steps:
+      - name: Checkout Code # basically runs git clone
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      # If pull request,
+      # generate a diff based on ALL commits from the branch creation
+      # If push directly to main,
+      # generate a diff based on just the previous commit
+      - name: Generate diff
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            git diff origin/${{ github.base_ref }}...HEAD > diff.txt
+          else
+            git diff HEAD~1 > diff.txt
+          fi
+
+      - name: Pull opencode image
+        run: docker pull -q ghcr.io/anomalyco/opencode:latest
+
+      # Jesus Christ
+      - name: Run opencode review
+        id: llm_analysis
+        continue-on-error: true
+        env:
+          LLAMA_CPP_API_KEY: ${{ secrets.LLAMA_CPP_API_KEY }}
+          OPENCODE_CONFIG_CONTENT: '{"$schema":"https://opencode.ai/config.json","provider":{"llamacpp":{"npm":"@ai-sdk/openai-compatible","name":"llama.cpp","options":{"baseURL":"http://mineral-pause.with.playit.plus:1447/v1","apiKey":"{env:LLAMA_CPP_API_KEY}","timeout":900000,"chunkTimeout":180000},"models":{"default":{"name":"llama.cpp default"}}}},"compaction":{"auto":true,"prune":true,"reserved":15000},"permission":{"read":"allow","glob":"allow","grep":"allow","list":"deny","lsp":"deny","codesearch":"deny","edit":"deny","bash":"deny","task":"deny","skill":"deny","webfetch":"deny","websearch":"deny","question":"deny","external_directory":"deny","doom_loop":"deny"}}'
+          CONTAINER_NAME: sync-opencode-review-${{ github.run_id }}
+        run: |
+          set +e
+
+          PROMPT=$(cat <<'PROMPT_END'
+          Do a code review. TODO fix this prompt.
+
+          The diff to review is in the attached file diff.txt. Treat it as the complete change set.
+
+          This is a one-shot review. There is no user to respond to. Your final message must contain exactly these four sections and nothing else:
+
+          ## Critical Issues
+          ## Potential Issues
+          ## Suggestions
+          ## Summary
+
+          Cite file:line for each finding. Write "None found" for empty sections. Any other output is a failure. Do not ask questions. Do not request approval. Do not request next steps. Do not propose to apply the diff.
+
+          You may use Read, Glob, or Grep to look up header files referenced by the diff if you need additional context, BUT you have a hard budget of at most 6 tool calls total across the entire review. After 6 tool calls (or sooner) you must immediately write the four sections, do not exceed this budget under any circumstances. Do not create todo lists, multi-step plans, or staged work. Do not attempt to Read or page through diff.txt, its contents are already attached.
+
+          Output the four sections now and stop.
+          PROMPT_END
+          )
+
+          timeout --preserve-status --signal=TERM --kill-after=30s 1980 \
+            docker run --rm --name "$CONTAINER_NAME" \
+              --add-host=host.docker.internal:host-gateway \
+              --user 65534:65534 \
+              --cap-drop ALL \
+              --security-opt no-new-privileges:true \
+              --read-only \
+              --tmpfs /tmp:rw,nosuid,size=2g,mode=1777 \
+              --pids-limit 64 \
+              --memory 8g \
+              -v "${{ github.workspace }}:/workspace:ro" \
+              -w /workspace \
+              -e HOME=/tmp \
+              -e XDG_DATA_HOME=/tmp/.local/share \
+              -e OPENCODE_CONFIG_CONTENT \
+              -e LLAMA_CPP_API_KEY \
+              ghcr.io/anomalyco/opencode:latest \
+              run \
+                "$PROMPT" \
+                --file /workspace/diff.txt \
+                --model llamacpp/default \
+            2>&1 | tee llm-analysis-raw.md
+          EXIT=${PIPESTATUS[0]}
+          echo "opencode exit code: $EXIT"
+          if [ "$EXIT" = "143" ] || [ "$EXIT" = "124" ]; then
+            echo "::warning::opencode timed out (exit $EXIT)"
+          fi
+          echo "llm_exit=$EXIT" >> "$GITHUB_OUTPUT"
+
+      # Produce a text report
+      - name: Generate report
+        if: always()
+        run: |
+          touch llm-analysis-raw.md
+          echo "raw output size: $(wc -c < llm-analysis-raw.md) bytes"
+
+          if grep -q '^## Critical Issues' llm-analysis-raw.md; then
+            sed -n '/^## Critical Issues/,$p' llm-analysis-raw.md > llm-analysis.md
+          else
+            {
+              echo "## LLM Analysis (structured report not produced)"
+              echo ""
+              echo "The model did not output the expected sections"
+              echo ""
+              echo "- exit code: \`${{ steps.llm_analysis.outputs.llm_exit }}\`"
+              echo ""
+              echo "Raw output tail:"
+              echo ""
+              echo '```'
+              tail -c 4000 llm-analysis-raw.md
+              echo '```'
+            } > llm-analysis.md
+          fi
+
+      # Debug step idk in case something goes wrong we can see what happened
+      - name: Show raw opencode output
+        if: always()
+        run: cat llm-analysis-raw.md
+
+      # Delete the container if it's still hanging around
+      - name: Cleanup container
+        if: always()
+        run: docker rm -f "sync-opencode-review-${{ github.run_id }}" 2>/dev/null || true
+
+      # This comment will appear in the pull request ui
+      - name: Post PR Comment
+        if: github.event_name == 'pull_request' && steps.llm_analysis.outcome == 'success'
+        continue-on-error: true
+        run: gh pr comment ${{ github.event.pull_request.number }} --body-file llm-analysis.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # Show the output unconditionally including in the actual actions output
+      - name: Add to Job Summary
+        if: always()
+        continue-on-error: true
+        run: |
+          cat llm-analysis.md >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo ""
+            echo "<details><summary>Raw opencode output</summary>"
+            echo ""
+            echo '```'
+            cat llm-analysis-raw.md
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Analysis Artifact
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: llm-analysis-${{ github.run_id }}
+          path: |
+            llm-analysis.md
+            llm-analysis-raw.md
+          if-no-files-found: ignore
+
+      - name: Post Warning on Failure
+        if: always() && steps.llm_analysis.outcome != 'success'
+        continue-on-error: true
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            gh pr comment ${{ github.event.pull_request.number }} --body "**LLM Analysis Warning**: The analysis didn't complete (timeout or llama.cpp unavailable). This is non-blocking and doesn't affect PR approval."
+          else
+            echo "::warning::LLM analysis didn't complete for this ${{ github.event_name }} event."
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
