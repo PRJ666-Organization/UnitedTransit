@@ -43,5 +43,8 @@ app-example
 /ios
 /android
 
-# watchman
+# watchman -- iOS
 .watchmanconfig
+
+# SQLite database
+server/data
