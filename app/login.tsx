@@ -1,4 +1,4 @@
-import { Redirect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -8,49 +8,90 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useAuth, TEST_USER } from '@/hooks/use-auth';
+import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function LoginScreen() {
-  const { user, login } = useAuth();
+  const { user, login, register, logout, setTestUser } = useAuth();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const theme = isDark
-    ? { bg: '#151718', text: '#ECEDEE', sub: '#9BA1A6', accent: '#fff', inputBg: '#2a2d2e', border: '#3a3d3e' }
-    : { bg: '#f5f5f5', text: '#11181C', sub: '#687076', accent: '#0a7ea4', inputBg: '#ffffff', border: '#d5d8dc' };
+    ? { bg: '#111318', text: '#ECEDEE', sub: '#9BA1A6', accent: '#fff', inputBg: '#22252b', border: '#3a3d3e' }
+    : { bg: '#eceef1', text: '#11181C', sub: '#687076', accent: '#0a7ea4', inputBg: '#ffffff', border: '#d5d8dc' };
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isRegister, setIsRegister] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  if (user) {
-    return <Redirect href="/(tabs)" />;
-  }
-
-  const handleLogin = () => {
+  const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert('Missing fields', 'Please enter email and password.');
       return;
     }
 
-    if (!login(email, password)) {
-      Alert.alert('Login failed', 'Invalid email or password.');
+    if (isRegister && password !== confirmPassword) {
+      Alert.alert('Password mismatch', 'Passwords do not match.');
       return;
     }
-    router.replace('/(tabs)');
+
+    setLoading(true);
+    const success = isRegister
+      ? await register(email, password)
+      : await login(email, password);
+    setLoading(false);
+
+    if (!success) {
+      Alert.alert(
+        isRegister ? 'Registration failed' : 'Login failed',
+        isRegister ? 'Could not create account.' : 'Invalid email or password.',
+      );
+      return;
+    }
+    router.navigate('/(tabs)/bookmarks');
   };
 
-  const fillTest = () => {
-    setEmail(TEST_USER.email);
-    setPassword(TEST_USER.password);
+  const handleLogout = () => {
+    Alert.alert('Sign out', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: logout },
+    ]);
   };
+
+  const handleTestUser = () => {
+    setTestUser();
+    router.navigate('/(tabs)/bookmarks');
+  };
+
+  if (user) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.bg }]}>
+        <View style={styles.content}>
+          <Text style={[styles.title, { color: theme.text }]}>Signed In</Text>
+          <Text style={[styles.subtitle, { color: theme.sub }]}>
+            {user.email}
+          </Text>
+          <TouchableOpacity
+            style={[styles.loginBtn, { backgroundColor: '#e74c3c' }]}
+            onPress={handleLogout}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <View style={styles.content}>
         <Text style={[styles.title, { color: theme.text }]}>United Transit</Text>
-        <Text style={[styles.subtitle, { color: theme.sub }]}>Sign in to continue</Text>
+        <Text style={[styles.subtitle, { color: theme.sub }]}>
+          {isRegister ? 'Create an account' : 'Sign in to continue'}
+        </Text>
 
         <Text style={[styles.label, { color: theme.sub }]}>EMAIL</Text>
         <TextInput
@@ -61,6 +102,7 @@ export default function LoginScreen() {
           onChangeText={setEmail}
           autoCapitalize="none"
           keyboardType="email-address"
+          editable={!loading}
         />
 
         <Text style={[styles.label, { color: theme.sub }]}>PASSWORD</Text>
@@ -71,17 +113,44 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
+          editable={!loading}
         />
 
+        {isRegister && (
+          <>
+            <Text style={[styles.label, { color: theme.sub }]}>CONFIRM PASSWORD</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.border }]}
+              placeholder="Confirm password"
+              placeholderTextColor={theme.sub}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+              editable={!loading}
+            />
+          </>
+        )}
+
         <TouchableOpacity
-          style={[styles.loginBtn, { backgroundColor: theme.accent }]}
-          onPress={handleLogin}
+          style={[styles.loginBtn, { backgroundColor: theme.accent, opacity: loading ? 0.6 : 1 }]}
+          onPress={handleSubmit}
+          disabled={loading}
         >
-          <Text style={{ color: theme.bg, fontWeight: '600', fontSize: 16 }}>Sign In</Text>
+          <Text style={{ color: theme.bg, fontWeight: '600', fontSize: 16 }}>
+            {loading ? '...' : isRegister ? 'Create Account' : 'Sign In'}
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.testBtn]} onPress={fillTest}>
-          <Text style={{ color: theme.sub, fontSize: 14 }}>Use test credentials</Text>
+        <TouchableOpacity style={[styles.switchBtn]} onPress={() => setIsRegister((p) => !p)}>
+          <Text style={{ color: theme.sub, fontSize: 14 }}>
+            {isRegister ? 'Already have an account? Sign in' : "Don't have an account? Register"}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.testBtn]} onPress={handleTestUser}>
+          <Text style={{ color: '#e74c3c', fontSize: 13, fontWeight: '600' }}>
+            [DEV] Bypass auth (test mode)
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -128,9 +197,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  testBtn: {
+  switchBtn: {
     padding: 12,
     alignItems: 'center',
     marginTop: 16,
+  },
+  testBtn: {
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 8,
   },
 });

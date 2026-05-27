@@ -8,18 +8,15 @@ export type AuthUser = {
 
 export type AuthContextType = {
   user: AuthUser | null;
-  login: (email: string, password: string) => boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  setTestUser: () => void;
 };
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const TEST_USER = {
-  email: 'test@test.com',
-  password: 'password123',
-  userId: 1,
-  isAdmin: false,
-};
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
 export function useAuth() {
   const context = useContext(AuthContext);

@@ -415,6 +415,6 @@ CREATE INDEX IF NOT EXISTS idx_vehicle_route     ON vehicle        (route_id);
 CREATE INDEX IF NOT EXISTS idx_rtd_vehicle       ON real_time_data (vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_location_stop     ON location       (stop_id);
 CREATE INDEX IF NOT EXISTS idx_alert_type        ON service_alert  (alert_type);
--- Role / Auth
-CREATE INDEX IF NOT EXISTS idx_role_type         ON role           (role_type);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_role_email ON role           (email);
+-- Role / Auth (commented out since role table was merged into user)
+-- CREATE INDEX IF NOT EXISTS idx_role_type         ON role           (role_type);
+-- CREATE UNIQUE INDEX IF NOT EXISTS idx_role_email ON role           (email);

@@ -1,3 +1,9 @@
+import Bookmark, { BookmarkLocation } from '@/components/bookmark';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { useAuth } from '@/hooks/use-auth';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,11 +16,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Bookmark, { BookmarkLocation } from '@/components/bookmark';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAuth } from '@/hooks/use-auth';
 
 type GeoResult = {
   formatted_address: string;
@@ -54,20 +55,36 @@ async function geocodeLocation(query: string): Promise<GeoResult[]> {
     throw new Error(`Geocoding failed: ${json.status}`);
   }
 
-  return (json.results || [])
-    .slice(0, 5)
-    .map((r: any) => ({
-      formatted_address: r.formatted_address,
-      lat: r.geometry.location.lat,
-      lng: r.geometry.location.lng,
-    }));
+  return (json.results || []).slice(0, 5).map((r: any) => ({
+    formatted_address: r.formatted_address,
+    lat: r.geometry.location.lat,
+    lng: r.geometry.location.lng,
+  }));
 }
 
 export default function BookmarksScreen() {
   const { user } = useAuth();
-  const theme = useColorScheme() === 'dark'
-    ? { bg: '#111318', card: '#1a1d23', text: '#ECEDEE', sub: '#9BA1A6', accent: '#fff', inputBg: '#22252b', border: '#3a3d3e' }
-    : { bg: '#eceef1', card: '#f6f7f8', text: '#11181C', sub: '#687076', accent: '#0a7ea4', inputBg: '#ffffff', border: '#d5d8dc' };
+  const router = useRouter();
+  const theme =
+    useColorScheme() === 'dark'
+      ? {
+          bg: '#111318',
+          card: '#1a1d23',
+          text: '#ECEDEE',
+          sub: '#9BA1A6',
+          accent: '#fff',
+          inputBg: '#22252b',
+          border: '#3a3d3e',
+        }
+      : {
+          bg: '#eceef1',
+          card: '#f6f7f8',
+          text: '#11181C',
+          sub: '#687076',
+          accent: '#0a7ea4',
+          inputBg: '#ffffff',
+          border: '#d5d8dc',
+        };
 
   const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -104,7 +121,10 @@ export default function BookmarksScreen() {
   const pickLocation = (result: GeoResult) => {
     setForm((prev) => ({
       ...prev,
-      locations: [...prev.locations, { latitude: result.lat, longitude: result.lng, name: result.formatted_address }],
+      locations: [
+        ...prev.locations,
+        { latitude: result.lat, longitude: result.lng, name: result.formatted_address },
+      ],
       searchQuery: '',
     }));
     setGeoResults([]);
@@ -167,17 +187,25 @@ export default function BookmarksScreen() {
 
           <ThemedText style={[styles.label, { color: theme.sub }]}>Bookmark Name</ThemedText>
           <TextInput
-            style={[styles.input, { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.border }]}
+            style={[
+              styles.input,
+              { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.border },
+            ]}
             placeholder="e.g. Daily Commute"
             placeholderTextColor={theme.sub}
             value={form.name}
             onChangeText={(text) => setForm((prev) => ({ ...prev, name: text }))}
           />
 
-          <ThemedText style={[styles.label, { color: theme.sub, marginTop: 16 }]}>Locations</ThemedText>
+          <ThemedText style={[styles.label, { color: theme.sub, marginTop: 16 }]}>
+            Locations
+          </ThemedText>
 
           {form.locations.map((loc, i) => (
-            <View key={i} style={[styles.locItem, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View
+              key={i}
+              style={[styles.locItem, { backgroundColor: theme.card, borderColor: theme.border }]}
+            >
               <ThemedText style={{ color: theme.text }}>
                 {loc.name ?? `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`}
               </ThemedText>
@@ -189,7 +217,10 @@ export default function BookmarksScreen() {
 
           <View style={styles.searchContainer}>
             <TextInput
-              style={[styles.input, { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.border }]}
+              style={[
+                styles.input,
+                { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.border },
+              ]}
               placeholder="Search location..."
               placeholderTextColor={theme.sub}
               value={form.searchQuery}
@@ -212,7 +243,10 @@ export default function BookmarksScreen() {
               {geoResults.map((result, i) => (
                 <Pressable
                   key={i}
-                  style={[styles.resultItem, { backgroundColor: theme.card, borderColor: theme.border }]}
+                  style={[
+                    styles.resultItem,
+                    { backgroundColor: theme.card, borderColor: theme.border },
+                  ]}
                   onPress={() => pickLocation(result)}
                 >
                   <ThemedText style={{ color: theme.text, fontSize: 14 }}>
@@ -227,18 +261,52 @@ export default function BookmarksScreen() {
           )}
 
           <View style={styles.actionRow}>
-            <Pressable style={[styles.actionBtn, { borderColor: theme.border }]} onPress={() => setShowForm(false)}>
+            <Pressable
+              style={[styles.actionBtn, { borderColor: theme.border }]}
+              onPress={() => setShowForm(false)}
+            >
               <ThemedText style={{ color: theme.sub, fontSize: 15 }}>Cancel</ThemedText>
             </Pressable>
             <Pressable
-              style={[styles.actionBtn, { backgroundColor: theme.accent, borderColor: theme.accent }]}
+              style={[
+                styles.actionBtn,
+                { backgroundColor: theme.accent, borderColor: theme.accent },
+              ]}
               onPress={saveBookmark}
             >
-              <ThemedText style={{ color: theme.bg, fontWeight: '600', fontSize: 15 }}>Save</ThemedText>
+              <ThemedText style={{ color: theme.bg, fontWeight: '600', fontSize: 15 }}>
+                Save
+              </ThemedText>
             </Pressable>
           </View>
         </ThemedView>
       </ScrollView>
+    );
+  }
+
+  if (!user) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.bg }]}>
+        <View style={styles.emptyContainer}>
+          <ThemedText type="subtitle" style={{ marginBottom: 8 }}>
+            Not signed in
+          </ThemedText>
+          <ThemedText style={{ opacity: 0.6, textAlign: 'center', marginBottom: 16 }}>
+            Sign in to save bookmarks.
+          </ThemedText>
+          <Pressable
+            style={[
+              styles.actionBtn,
+              { backgroundColor: theme.accent, borderColor: theme.accent, height: 100 },
+            ]}
+            onPress={() => router?.navigate('/login')}
+          >
+            <ThemedText style={{ color: theme.bg, fontWeight: '600', fontSize: 15 }}>
+              Go to Account
+            </ThemedText>
+          </Pressable>
+        </View>
+      </View>
     );
   }
 
@@ -374,5 +442,6 @@ const styles = StyleSheet.create({
     padding: 12,
     alignItems: 'center',
     borderWidth: 1,
+    maxHeight: 50,
   },
 });
