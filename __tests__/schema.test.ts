@@ -80,7 +80,7 @@ const SCHEMA_SQL = `
     stop_id INTEGER,
     user_id INTEGER,
     CONSTRAINT pk_trip PRIMARY KEY (trip_id AUTOINCREMENT),
-    CONSTRAINT chk_transit_type CHECK (preferred_transit_type IN ('BUS', 'SUBWAY', 'WALK', NULL)),
+    CONSTRAINT chk_transit_type CHECK (preferred_transit_type IN ('BUS', 'SUBWAY', 'WALK') OR preferred_transit_type IS NULL),
     CONSTRAINT fk_trip_route FOREIGN KEY (route_id) REFERENCES route (route_id) ON DELETE SET NULL,
     CONSTRAINT fk_trip_stop FOREIGN KEY (stop_id) REFERENCES stop (stop_id) ON DELETE SET NULL
   );

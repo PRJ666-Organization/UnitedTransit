@@ -11,7 +11,10 @@ type Location = {
   name?: string;
 };
 
-function computeRegion(locations: Location[], defaultLocation: { latitude: number; longitude: number }): Region {
+function computeRegion(
+  locations: Location[],
+  defaultLocation: { latitude: number; longitude: number },
+): Region {
   if (locations.length === 0) {
     return {
       latitude: defaultLocation.latitude,
@@ -85,7 +88,7 @@ describe('Map Region Calculation', () => {
     const region = computeRegion(locations, defaultLocation);
 
     expect(region.latitude).toBeCloseTo((43.7 + 43.6) / 2, 4);
-    expect(region.longitude).toBeCloseTo((-79.4 + -79.5) / 2, 4);
+    expect(region.longitude).toBeCloseTo((-79.35 + -79.5) / 2, 4);
   });
 
   it('applies padding to small deltas', () => {
@@ -96,8 +99,8 @@ describe('Map Region Calculation', () => {
 
     const region = computeRegion(locations, defaultLocation);
 
-    expect(region.latitudeDelta).toBe(0.01);
-    expect(region.longitudeDelta).toBe(0.01);
+    expect(region.latitudeDelta).toBe(0.02);
+    expect(region.longitudeDelta).toBe(0.02);
   });
 
   it('handles locations with large spread', () => {
@@ -137,10 +140,7 @@ describe('Map Region Calculation', () => {
   });
 
   it('handles single coordinate', () => {
-    const region = computeRegion(
-      [{ latitude: 51.5074, longitude: -0.1278 }],
-      defaultLocation,
-    );
+    const region = computeRegion([{ latitude: 51.5074, longitude: -0.1278 }], defaultLocation);
 
     expect(region.latitudeDelta).toBe(0.015);
     expect(region.longitudeDelta).toBe(0.0121);

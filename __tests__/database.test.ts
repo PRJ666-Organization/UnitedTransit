@@ -35,7 +35,7 @@ describe('better-sqlite3 DB Module', () => {
   it('inserts a row and returns lastInsertRowid', () => {
     const stmt = db.prepare('INSERT INTO test_table (name, value) VALUES (?, ?)');
     const info = stmt.run('test', 42);
-    expect(info.lastInsertRowid).toBe(1n);
+    expect(info.lastInsertRowid).toBe(1);
   });
 
   it('queries inserted data correctly', () => {

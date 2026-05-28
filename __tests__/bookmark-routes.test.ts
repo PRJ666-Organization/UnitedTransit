@@ -66,13 +66,13 @@ describe('Bookmark API Routes', () => {
 
   it('POST /bookmarks rejects missing name', () => {
     const body = { locations: [] };
-    const isValid = body.name && Array.isArray(body.locations);
+    const isValid = !(!body.name || !Array.isArray(body.locations));
     expect(isValid).toBe(false);
   });
 
   it('POST /bookmarks rejects missing locations', () => {
     const body = { name: 'Test' };
-    const isValid = body.name && Array.isArray(body.locations);
+    const isValid = !(!body.name || !Array.isArray(body.locations));
     expect(isValid).toBe(false);
   });
 

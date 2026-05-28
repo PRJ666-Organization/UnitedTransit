@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "setup-gtfs": "ts-node src/gtfsImport/setupGtfs.ts",
+    "setup-gtfs": "ts-node src/gtfsImport/setupGTFS.ts",
     "test-gtfs": "ts-node src/testDb.ts"
   },
   "keywords": [],
