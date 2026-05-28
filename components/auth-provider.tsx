@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { AuthContext, AuthUser } from '@/hooks/use-auth';
+import { AuthContext, AuthUser, BookmarkLocation } from '@/hooks/use-auth';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [activeBookmarkLocations, setActiveBookmarkLocations] = useState<BookmarkLocation[]>([]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
@@ -19,7 +20,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) return false;
       const data = await res.json();
       console.log('[Auth] Login success', data);
-      setUser({ userId: data.userId, email, isAdmin: false });
+      setUser({ userId: data.userId, email, isAdmin: false, token: data.token });
       return true;
     } catch (e) {
       console.error('[Auth] Login error', e);
@@ -44,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const data = await res.json();
       console.log('[Auth] Register success', data);
-      setUser({ userId: data.userId, email, isAdmin: false });
+      setUser({ userId: data.userId, email, isAdmin: false, token: data.token });
       return true;
     } catch (e) {
       console.error('[Auth] Register error', e);
@@ -64,8 +65,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const fetchBookmarks = async (): Promise<any[]> => {
+    if (!user?.token) return [];
+    try {
+      const res = await fetch(`${API_URL}/bookmarks`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      if (!res.ok) return [];
+      return await res.json();
+    } catch (e) {
+      console.error('[Bookmarks] Fetch error', e);
+      return [];
+    }
+  };
+
+  const createBookmark = async (name: string, locations: any[]): Promise<boolean> => {
+    if (!user?.token) return false;
+    try {
+      const res = await fetch(`${API_URL}/bookmarks`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, locations }),
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('[Bookmarks] Create error', e);
+      return false;
+    }
+  };
+
+  const deleteBookmark = async (id: string): Promise<boolean> => {
+    if (!user?.token) return false;
+    try {
+      const res = await fetch(`${API_URL}/bookmarks/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('[Bookmarks] Delete error', e);
+      return false;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, setTestUser }}>
+    <AuthContext.Provider value={{ user, login, register, logout, setTestUser, fetchBookmarks, createBookmark, deleteBookmark, activeBookmarkLocations, setActiveBookmarkLocations }}>
       {children}
     </AuthContext.Provider>
   );

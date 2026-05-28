@@ -1,20 +1,20 @@
 import bcrypt from 'bcrypt';
 import { Request, Response, Router } from 'express';
 import jwt from 'jsonwebtoken';
-import db from '../db/database.web';
+import { runQuery, runMutation } from '../db/database';
 
 const SALT_ROUNDS = 15;
 const router = Router();
 
-router.post('/register', (req: Request, res: Response): void => {
+router.post('/register', async (req: Request, res: Response): Promise<void> => {
   const { email, pwd } = req.body;
   if (!email || !pwd) {
     res.status(400).json({ error: 'Email and password are required.' });
     return;
   }
 
-  const existing = db.prepare('SELECT user_id FROM user WHERE email = ?').get(email);
-  if (existing) {
+  const existing = await runQuery('SELECT user_id FROM user WHERE email = ?', [email]);
+  if (existing.length > 0) {
     res.status(409).json({ error: 'Email already registered.' });
     return;
   }
@@ -22,31 +22,33 @@ router.post('/register', (req: Request, res: Response): void => {
   const password_hash = bcrypt.hashSync(pwd, SALT_ROUNDS);
   const created_at = new Date().toISOString().split('T')[0];
 
-  const result = db
-    .prepare('INSERT INTO user (email, password_hash, created_at) VALUES (?, ?, ?)')
-    .run(email, password_hash, created_at);
+  const result = await runMutation(
+    'INSERT INTO user (email, password_hash, created_at) VALUES (?, ?, ?)',
+    [email, password_hash, created_at],
+  );
 
   const token = jwt.sign(
-    { userId: result.lastInsertRowid, isAdmin: false },
+    { userId: result.lastInsertRowId, isAdmin: false },
     process.env.JWT_SECRET as string,
     { expiresIn: '24h' },
   );
-  res.status(201).json({ token, userId: result.lastInsertRowid });
+  res.status(201).json({ token, userId: result.lastInsertRowId });
 });
 
-router.post('/login', (req: Request, res: Response): void => {
+router.post('/login', async (req: Request, res: Response): Promise<void> => {
   const { email, pwd } = req.body;
   if (!email || !pwd) {
     res.status(400).json({ error: 'Email and password are required field' });
     return;
   }
 
-  const user = db.prepare('SELECT * FROM user WHERE email = ?').get(email) as
+  const users = await runQuery('SELECT * FROM user WHERE email = ?', [email]);
+  const user = users[0] as
     | {
         user_id: number;
         password_hash: string;
         is_active: number;
-        is_admin: boolean; // only use 0 or 1 not True or False
+        is_admin: number;
       }
     | undefined;
 

@@ -4,7 +4,7 @@ import { ThemedView } from '@/components/themed-view';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -63,7 +63,7 @@ async function geocodeLocation(query: string): Promise<GeoResult[]> {
 }
 
 export default function BookmarksScreen() {
-  const { user } = useAuth();
+  const { user, fetchBookmarks, createBookmark, deleteBookmark, setActiveBookmarkLocations } = useAuth();
   const router = useRouter();
   const theme =
     useColorScheme() === 'dark'
@@ -92,7 +92,23 @@ export default function BookmarksScreen() {
   const [geoResults, setGeoResults] = useState<GeoResult[]>([]);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (user?.token) {
+      loadBookmarks();
+    }
+  }, [user?.token]);
+
+  const loadBookmarks = async () => {
+    const data = await fetchBookmarks();
+    const parsed: BookmarkEntry[] = data.map((b: any) => ({
+      id: String(b.bookmark_id),
+      name: b.trip_name,
+      locations: b.locations_json ? JSON.parse(b.locations_json) : [],
+    }));
+    setBookmarks(parsed);
+  };
 
   const searchLocation = (query: string) => {
     setForm((prev) => ({ ...prev, searchQuery: query }));
@@ -138,7 +154,7 @@ export default function BookmarksScreen() {
     }));
   };
 
-  const saveBookmark = () => {
+  const saveBookmark = async () => {
     if (!form.name.trim()) {
       Alert.alert('Name required', 'Bookmark must have a name.');
       return;
@@ -149,29 +165,37 @@ export default function BookmarksScreen() {
       return;
     }
 
-    const entry: BookmarkEntry = {
-      id: Date.now().toString(),
-      name: form.name.trim(),
-      locations: form.locations,
-    };
-
-    setBookmarks((prev) => [...prev, entry]);
-    setForm(initialCreateState);
-    setShowForm(false);
+    const success = await createBookmark(form.name.trim(), form.locations);
+    if (success) {
+      await loadBookmarks();
+      setForm(initialCreateState);
+      setShowForm(false);
+    } else {
+      Alert.alert('Failed to save', 'Could not create bookmark.');
+    }
   };
 
-  const deleteBookmark = (id: string) => {
-    setBookmarks((prev) => prev.filter((b) => b.id !== id));
+  const handleDeleteBookmark = async (id: string) => {
+    const success = await deleteBookmark(id);
+    if (success) {
+      setBookmarks((prev) => prev.filter((b) => b.id !== id));
+    } else {
+      Alert.alert('Failed to delete', 'Could not delete bookmark.');
+    }
   };
 
   const renderBookmark = ({ item }: { item: BookmarkEntry }) => (
     <Bookmark
       name={item.name}
       locations={item.locations}
+      onPress={() => {
+        setActiveBookmarkLocations(item.locations);
+        router.navigate('/');
+      }}
       onDelete={() =>
         Alert.alert('Delete bookmark', `Delete "${item.name}"?`, [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: () => deleteBookmark(item.id) },
+          { text: 'Delete', style: 'destructive', onPress: () => handleDeleteBookmark(item.id) },
         ])
       }
     />
@@ -330,7 +354,7 @@ export default function BookmarksScreen() {
       ) : (
         <FlatList
           data={bookmarks}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => String(item.id)}
           renderItem={renderBookmark}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}

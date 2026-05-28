@@ -137,6 +137,7 @@ export const SCHEMA_SQL = `
     trip_name     TEXT    NOT NULL,
     save_date     TEXT    NOT NULL,
     reminder_time REAL,
+    locations_json TEXT,
     user_id       INTEGER,
     trip_id       INTEGER,
     CONSTRAINT pk_bookmark PRIMARY KEY (bookmark_id AUTOINCREMENT),

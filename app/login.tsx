@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+// Note: Alert still used for logout confirmation
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -26,15 +28,33 @@ export default function LoginScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [generalError, setGeneralError] = useState('');
+
+  const clearErrors = () => {
+    setEmailError('');
+    setPasswordError('');
+    setConfirmPasswordError('');
+    setGeneralError('');
+  };
 
   const handleSubmit = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Missing fields', 'Please enter email and password.');
+    clearErrors();
+
+    if (!email.trim()) {
+      setEmailError('Email is required.');
+      return;
+    }
+
+    if (!password.trim()) {
+      setPasswordError('Password is required.');
       return;
     }
 
     if (isRegister && password !== confirmPassword) {
-      Alert.alert('Password mismatch', 'Passwords do not match.');
+      setConfirmPasswordError('Passwords do not match.');
       return;
     }
 
@@ -45,10 +65,11 @@ export default function LoginScreen() {
     setLoading(false);
 
     if (!success) {
-      Alert.alert(
-        isRegister ? 'Registration failed' : 'Login failed',
-        isRegister ? 'Could not create account.' : 'Invalid email or password.',
-      );
+      if (isRegister) {
+        setEmailError('Could not create account.');
+      } else {
+        setPasswordError('Incorrect email or password.');
+      }
       return;
     }
     router.navigate('/(tabs)/bookmarks');
@@ -99,11 +120,12 @@ export default function LoginScreen() {
           placeholder="Email"
           placeholderTextColor={theme.sub}
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(val) => { setEmail(val); clearErrors(); }}
           autoCapitalize="none"
           keyboardType="email-address"
           editable={!loading}
         />
+        {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
         <Text style={[styles.label, { color: theme.sub }]}>PASSWORD</Text>
         <TextInput
@@ -111,10 +133,11 @@ export default function LoginScreen() {
           placeholder="Password"
           placeholderTextColor={theme.sub}
           value={password}
-          onChangeText={setPassword}
+          onChangeText={(val) => { setPassword(val); clearErrors(); }}
           secureTextEntry
           editable={!loading}
         />
+        {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
         {isRegister && (
           <>
@@ -124,10 +147,11 @@ export default function LoginScreen() {
               placeholder="Confirm password"
               placeholderTextColor={theme.sub}
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={(val) => { setConfirmPassword(val); clearErrors(); }}
               secureTextEntry
               editable={!loading}
             />
+            {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
           </>
         )}
 
@@ -196,6 +220,11 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     marginTop: 8,
+  },
+  errorText: {
+    color: '#e74c3c',
+    fontSize: 12,
+    marginBottom: 12,
   },
   switchBtn: {
     padding: 12,

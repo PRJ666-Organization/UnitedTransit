@@ -1,9 +1,16 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useState } from 'react';
 
 export type AuthUser = {
   userId: number;
   email: string;
   isAdmin: boolean;
+  token?: string;
+};
+
+export type BookmarkLocation = {
+  latitude: number;
+  longitude: number;
+  name?: string;
 };
 
 export type AuthContextType = {
@@ -12,6 +19,11 @@ export type AuthContextType = {
   register: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   setTestUser: () => void;
+  fetchBookmarks: () => Promise<any[]>;
+  createBookmark: (name: string, locations: any[]) => Promise<boolean>;
+  deleteBookmark: (id: string) => Promise<boolean>;
+  activeBookmarkLocations: BookmarkLocation[];
+  setActiveBookmarkLocations: (locs: BookmarkLocation[]) => void;
 };
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);

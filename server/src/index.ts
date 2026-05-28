@@ -1,13 +1,16 @@
 import dotenv from 'dotenv';
 dotenv.config({ path: '../.env' });
 
+import cors from 'cors';
 import express from 'express';
-import './db/database.web';
+import { getDatabase } from './db/database';
 import authRoutes from './routes/auth_routes';
+import bookmarkRoutes from './routes/bookmarks';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(cors());
 app.use(express.json());
 
 app.get('/health', (req, res) => {
@@ -15,7 +18,9 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/auth', authRoutes);
+app.use('/bookmarks', bookmarkRoutes);
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  await getDatabase();
   console.log(`Server running on port ${PORT}`);
 });
