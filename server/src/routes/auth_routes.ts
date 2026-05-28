@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import { Request, Response, Router } from 'express';
 import jwt from 'jsonwebtoken';
-import db from '../db/database';
+import db from '../db/database.web';
 
 const SALT_ROUNDS = 15;
 const router = Router();

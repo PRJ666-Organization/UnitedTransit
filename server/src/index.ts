@@ -2,8 +2,8 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '../.env' });
 
 import express from 'express';
+import './db/database.web';
 import authRoutes from './routes/auth_routes';
-import './db/database';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
