@@ -1,1 +1,1 @@
-export { getDatabase, runMutation, runQuery } from './database.server';
+export { getDatabase, runMutation, runQuery, runTransaction } from './database.server';

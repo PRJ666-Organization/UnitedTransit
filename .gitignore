@@ -48,3 +48,4 @@ app-example
 
 # SQLite database
 server/data
+server/gtfs/

@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
-import { SCHEMA_SQL } from './schema';
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
+import { SCHEMA_SQL } from './schema';
 
 const DB_PATH = path.join(__dirname, '..', '..', 'data', 'transit.db');
 
@@ -54,4 +54,16 @@ export async function runMutation(sql: string, params: any[] = []): Promise<any>
   const stmt = database.prepare(sql);
   const info = stmt.run(...params);
   return { lastInsertRowId: info.lastInsertRowid };
+}
+
+export async function runTransaction(
+  callback: (database: Database.Database) => void,
+): Promise<void> {
+  const database = await getDatabase();
+
+  const transaction = database.transaction(() => {
+    callback(database);
+  });
+
+  transaction();
 }

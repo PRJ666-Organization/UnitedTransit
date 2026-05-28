@@ -239,6 +239,78 @@ export const SCHEMA_SQL = `
     CONSTRAINT fk_usa_alert FOREIGN KEY (alert_id) REFERENCES service_alert (alert_id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS gtfs_stops (
+    stop_id TEXT PRIMARY KEY,
+    stop_code TEXT,
+    stop_name TEXT NOT NULL,
+    stop_desc TEXT,
+    stop_lat REAL NOT NULL,
+    stop_lon REAL NOT NULL,
+    zone_id TEXT,
+    stop_url TEXT,
+    location_type INTEGER,
+    parent_station TEXT,
+    stop_timezone TEXT,
+    wheelchair_boarding INTEGER,
+    level_id TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS gtfs_routes (
+    route_id TEXT PRIMARY KEY,
+    agency_id TEXT,
+    route_short_name TEXT,
+    route_long_name TEXT,
+    route_type INTEGER,
+    route_color TEXT,
+    route_text_color TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS gtfs_trips (
+    trip_id TEXT PRIMARY KEY,
+    route_id TEXT NOT NULL,
+    service_id TEXT NOT NULL,
+    trip_headsign TEXT,
+    trip_short_name TEXT,
+    direction_id INTEGER,
+    block_id TEXT,
+    shape_id TEXT,
+    wheelchair_accessible INTEGER,
+
+    FOREIGN KEY (route_id)
+        REFERENCES gtfs_routes(route_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS gtfs_stop_times (
+    trip_id TEXT NOT NULL,
+    arrival_time TEXT NOT NULL,
+    departure_time TEXT NOT NULL,
+    stop_id TEXT NOT NULL,
+    stop_sequence INTEGER NOT NULL,
+    stop_headsign TEXT,
+    pickup_type INTEGER,
+    drop_off_type INTEGER,
+    shape_dist_traveled REAL,
+    timepoint INTEGER,
+
+    PRIMARY KEY (trip_id, stop_sequence),
+
+    FOREIGN KEY (trip_id)
+        REFERENCES gtfs_trips(trip_id),
+
+    FOREIGN KEY (stop_id)
+        REFERENCES gtfs_stops(stop_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS gtfs_shapes (
+    shape_id TEXT NOT NULL,
+    shape_pt_lat REAL NOT NULL,
+    shape_pt_lon REAL NOT NULL,
+    shape_pt_sequence INTEGER NOT NULL,
+    shape_dist_traveled REAL,
+
+    PRIMARY KEY (shape_id, shape_pt_sequence)
+  );
+
   CREATE UNIQUE INDEX IF NOT EXISTS idx_user_email ON user (email);
   CREATE INDEX IF NOT EXISTS idx_user_admin        ON user (is_admin);
   CREATE INDEX IF NOT EXISTS idx_trip_user         ON trip (user_id);
@@ -251,4 +323,8 @@ export const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_rtd_vehicle       ON real_time_data (vehicle_id);
   CREATE INDEX IF NOT EXISTS idx_location_stop     ON location       (stop_id);
   CREATE INDEX IF NOT EXISTS idx_alert_type        ON service_alert  (alert_type);
+  CREATE INDEX IF NOT EXISTS idx_gtfs_stop_times_stop ON gtfs_stop_times(stop_id);
+  CREATE INDEX IF NOT EXISTS idx_gtfs_stop_times_trip ON gtfs_stop_times(trip_id);
+  CREATE INDEX IF NOT EXISTS idx_gtfs_trips_route ON gtfs_trips(route_id);
+  CREATE INDEX IF NOT EXISTS idx_gtfs_shapes_shape ON gtfs_shapes(shape_id);
 `;
