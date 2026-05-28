@@ -4,18 +4,14 @@ import { importStops } from './importStops';
 import { importStopTimes } from './importStopTimes';
 import { importTrips } from './importTrips';
 
-async function importAll() {
-  try {
-    await importStops();
-    await importRoutes();
-    await importTrips();
-    await importStopTimes();
-    await importShapes();
+export async function importAll() {
+  console.log('Starting GTFS imports...');
 
-    console.log('All GTFS data imported');
-  } catch (error) {
-    console.error(error);
-  }
+  await importStops();
+  await importRoutes();
+  await importTrips();
+  await importStopTimes();
+  await importShapes();
+
+  console.log('All GTFS imports complete');
 }
-
-importAll();
