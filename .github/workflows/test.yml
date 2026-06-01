@@ -8,7 +8,7 @@ on:
   # the code we merge in, is not butt poo
   pull_request:
     branches:
-      - main
+      - master
   # if we push DIRECTLY to main, we still want to test,
   # again so that the code in main is not butt poo
   push:
