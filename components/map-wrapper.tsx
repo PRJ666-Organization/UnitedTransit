@@ -1,60 +1,55 @@
 import * as Location from 'expo-location';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
-import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
+import React, { useEffect, useRef } from 'react';
+import { Platform, StyleSheet } from 'react-native';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import { BookmarkLocation } from '@/hooks/use-auth';
 
-export default function MapWrapper() {
-  const [location, setLocation] = useState({ latitude: 37.78825, longitude: -122.4324 });
-  const [loading, setLoading] = useState(true);
+export default function MapWrapper({
+  bookmarkLocations,
+  initialRegion,
+  onClearRoute,
+}: {
+  bookmarkLocations: BookmarkLocation[];
+  initialRegion: Region;
+  onClearRoute?: () => void;
+}) {
+  const mapRef = useRef<MapView>(null);
+
+  console.log('[MapWrapper] RENDER bookmarkLocations:', bookmarkLocations.length);
 
   useEffect(() => {
     (async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setLoading(false);
-          return;
-        }
-
-        const loc = await Location.getCurrentPositionAsync({});
-        const lat = Number(loc.coords.latitude);
-        const lng = Number(loc.coords.longitude);
-
-        if (Number.isFinite(lat) && Number.isFinite(lng)) {
-          setLocation({
-            latitude: lat,
-            longitude: lng,
-          });
-        }
-        setLoading(false);
+        await Location.requestForegroundPermissionsAsync();
+        await Location.getCurrentPositionAsync({});
       } catch (e) {
         console.error('Failed to get location:', e);
-        setLoading(false);
       }
     })();
   }, []);
 
-  if (loading) {
-    return (
-      <View style={styles.map}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
-
   return (
     <MapView
+      ref={mapRef}
       provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
       style={styles.map}
-      region={{
-        latitude: location.latitude,
-        longitude: location.longitude,
-        latitudeDelta: 0.015,
-        longitudeDelta: 0.0121,
-      }}
-      showsUserLocation
-      showsMyLocationButton
-    />
+      region={initialRegion}
+    >
+      {bookmarkLocations.map((loc, i) => (
+        <Marker
+          key={`${loc.latitude}-${loc.longitude}-${i}`}
+          coordinate={loc}
+          title={loc.name ?? `Stop ${i + 1}`}
+        />
+      ))}
+      {bookmarkLocations.length >= 2 && (
+        <Polyline
+          coordinates={bookmarkLocations}
+          strokeColor="#0a7ea4"
+          strokeWidth={3}
+        />
+      )}
+    </MapView>
   );
 }
 

@@ -6,19 +6,38 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "setup-gtfs": "ts-node src/gtfsImport/setupGTFS.ts",
+    "test-gtfs": "ts-node src/testDb.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.9.1",
+    "@types/unzipper": "^0.10.11",
+    "ts-node": "^10.9.2",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "express": "^5.2.1"
+    "@types/nodemailer": "^8.0.0",
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^12.10.0",
+    "cors": "^2.8.6",
+    "csv-parser": "^3.2.1",
+    "deep-email-validator": "^0.1.27",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "gtfs-realtime-bindings": "^2.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^8.0.10",
+    "unzipper": "^0.12.3"
   }
 }

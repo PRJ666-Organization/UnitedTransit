@@ -10,7 +10,7 @@ web-build/
 expo-env.d.ts
 
 # Native
-.kotlin/
+.kotlin/ 
 *.orig.*
 *.jks
 *.p8
@@ -43,5 +43,9 @@ app-example
 /ios
 /android
 
-# watchman
+# watchman -- iOS
 .watchmanconfig
+
+# SQLite database
+server/data
+server/gtfs/

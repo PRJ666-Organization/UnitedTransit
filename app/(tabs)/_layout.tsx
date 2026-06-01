@@ -18,6 +18,7 @@ export default function TabLayout() {
         headerShown: true,
         headerTitleAlign: 'center',
         tabBarButton: HapticTab,
+        tabBarStyle: { backgroundColor: theme.background },
 
         headerStyle: { backgroundColor: theme.background },
         headerTintColor: theme.text,
@@ -42,7 +43,7 @@ export default function TabLayout() {
                   fontSize: 14,
                   fontWeight: '400',
                   color: theme.text,
-                  opacity: 0.6,
+                  opacity: 0.8,
                   marginTop: 2,
                 }}
               >
@@ -62,12 +63,19 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="explore"
+        name="bookmarks"
         options={{
-          title: 'Explore',
+          title: 'Bookmarks',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
         }}
       />
-    </Tabs>
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+         tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
+        }}
+       />
+       </Tabs>
   );
 }
