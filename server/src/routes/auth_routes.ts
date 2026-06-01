@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import { Request, Response, Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { runQuery, runMutation } from '../db/database';
+import { createVerificationToken, sendVerificationEmail } from '../middleware/email_auth';
 
 const SALT_ROUNDS = 15;
 const router = Router();
@@ -23,7 +24,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
   const created_at = new Date().toISOString().split('T')[0];
 
   const result = await runMutation(
-    'INSERT INTO user (email, password_hash, created_at) VALUES (?, ?, ?)',
+    'INSERT INTO user (email, password_hash, created_at, is_verified) VALUES (?, ?, ?, 0)',
     [email, password_hash, created_at],
   );
 

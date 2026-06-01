@@ -104,13 +104,15 @@ export const SCHEMA_SQL = `
     created_at              TEXT    NOT NULL,
     is_active               INTEGER NOT NULL DEFAULT 1,
     is_admin                INTEGER NOT NULL DEFAULT 0,
+    is_verified             INTEGER NOT NULL DEFAULT 0,
     device_id               INTEGER,
     location                TEXT,
     notification_preference TEXT,
     trip_id                 INTEGER,
     CONSTRAINT pk_user PRIMARY KEY (user_id AUTOINCREMENT),
-    CONSTRAINT chk_is_active CHECK (is_active IN (0, 1)),
-    CONSTRAINT chk_is_admin  CHECK (is_admin  IN (0, 1)),
+    CONSTRAINT chk_is_active   CHECK (is_active IN (0, 1)),
+    CONSTRAINT chk_is_admin    CHECK (is_admin  IN (0, 1)),
+    CONSTRAINT chk_is_verified CHECK (is_verified  IN (0, 1)),
     CONSTRAINT fk_user_trip
         FOREIGN KEY (trip_id) REFERENCES trip (trip_id)
         ON DELETE SET NULL

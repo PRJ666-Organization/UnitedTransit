@@ -21,7 +21,7 @@ export function isValidEmail(email: string): boolean {
 
 export function createVerificationToken(userId: number): string {
   return jwt.sign(
-    { userId, purpose: 'verify' },
+    { userId: 'verify' },
     process.env.JWT_SECRET as string,
     { expiresIn: '24h' },
   );
@@ -33,8 +33,8 @@ export async function sendVerificationEmail(email: string, token: string): Promi
     from: process.env.SMTP_USER,
     to: email,
     subject: 'Verify your UnitedTransit account',
-    html: `<p>Click the link below to verify your email. It expires in 24 hours.</p>
-           <p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
+    html: `<p>Click the link below to verify your email. It will expire in 24 hours.</p>
+          <p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
   });
 }
 
@@ -45,7 +45,7 @@ export async function requireVerified(req: AuthRequest, res: Response, next: Nex
   }
   const rows = await runQuery('SELECT is_verified FROM user WHERE user_id = ?', [req.userId]);
   if (!rows[0] || rows[0].is_verified !== 1) {
-    res.status(403).json({ error: 'Email not verified' });
+    res.status(403).json({ error: 'Email is not verified' });
     return;
   }
   next();
