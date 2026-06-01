@@ -27,13 +27,16 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
+    "@types/nodemailer": "^8.0.0",
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.6",
     "csv-parser": "^3.2.1",
+    "deep-email-validator": "^0.1.27",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^8.0.10",
     "unzipper": "^0.12.3"
   }
 }
