@@ -16,18 +16,18 @@ on:
       - master
 
 jobs:
-    web-server-test: # name of the job
-      runs-on: 
-        - ubuntu-latest
-        - self-hosted
-        - Linux
-        - X64
-      steps:
-        - name: Checkout Code # basically runs git clone
-          uses: actions/checkout@v6
-          with:
-            ref: ${{ github.event.pull_request.head.sha || github.sha }}
-            fetch-depth: 0
+  web-server-test: # name of the job
+    runs-on:
+      - ubuntu-latest
+      - self-hosted
+      - Linux
+      - X64
+    steps:
+      - name: Checkout Code # basically runs git clone
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
 
   #   ios-test:
   #     runs-on: macos-latest
@@ -47,26 +47,26 @@ jobs:
   #           ref: ${{ github.event.pull_request.head.sha || github.sha }}
   #           fetch-depth: 0
 
-    website-test:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout Code # basically runs git clone
-          uses: actions/checkout@v6
-          with:
-            ref: ${{ github.event.pull_request.head.sha || github.sha }}
-            fetch-depth: 0
-        # because expo specifically requires version 22 (for iOS at least)
-        - name: Setup Node.js v.22
-          uses: actions/setup-node@v4
-          with:
-            node-version: 22
-            cache: 'npm'
-        
-        - name: Install dependencies
-          run: npm ci
+  website-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code # basically runs git clone
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      # because expo specifically requires version 22 (for iOS at least)
+      - name: Setup Node.js v.22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
 
-        - name: Run Tests
-          run: npm run test
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Tests
+        run: npm run test
 
   # This is one job, does some LLM analysis, might as well
   llm-analysis: # name of another job
@@ -81,7 +81,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Checkout Code # basically runs git clone
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
@@ -222,7 +222,7 @@ jobs:
 
       - name: Upload Analysis Artifact
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: llm-analysis-${{ github.run_id }}
           path: |
