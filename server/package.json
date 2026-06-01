@@ -33,6 +33,7 @@
     "csv-parser": "^3.2.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "gtfs-realtime-bindings": "^2.0.0",
     "jsonwebtoken": "^9.0.3",
     "unzipper": "^0.12.3"
   }
