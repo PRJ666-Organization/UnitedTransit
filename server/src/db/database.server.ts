@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { SCHEMA_SQL } from './schema';
 
+
 const DB_PATH = path.join(__dirname, '..', '..', 'data', 'transit.db');
 
 function ensureDataDir() {
@@ -34,6 +35,8 @@ export async function getDatabase(): Promise<Database.Database> {
   // Migration: add locations_json column if it doesn't exist
   try {
     db.exec('ALTER TABLE bookmark ADD COLUMN locations_json TEXT;');
+    //db.exec('ALTER TABLE user ADD COLUMN is_verified INTEGER NOT NULL DEFAULT 0;'); // user email
+    //this won't work
   } catch {
     // Column already exists, ignore
   }
