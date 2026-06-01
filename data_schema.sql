@@ -95,7 +95,8 @@ CREATE TABLE IF NOT EXISTS user (
     email                     TEXT     NOT NULL UNIQUE, -- login credential
     password_hash             TEXT     NOT NULL,        -- bcrypt / argon2 hash
     created_at                TEXT     NOT NULL,        -- ISO-8601: 'YYYY-MM-DD'
-    is_active                 INTEGER  NOT NULL DEFAULT 1, -- 0 = false, 1 = true
+    is_verified               INTEGER  NOT NULL DEFAULT 0,  -- 0 = false, 1 = true
+    -- is_active                 INTEGER  NOT NULL DEFAULT 1, -- 0 = false, 1 = true // not needed
     is_admin                  INTEGER  NOT NULL DEFAULT 0, -- 0 = false, 1 = true
     device_id                 INTEGER,                  -- device identifier
     location                  TEXT,                     -- current location string
@@ -156,7 +157,7 @@ CREATE TABLE IF NOT EXISTS route (
     estimated_time        REAL,              -- estimated length in minutes
     number_of_transfers   INTEGER  DEFAULT 0,
     route_status          TEXT,              -- e.g. 'LINE 1 - CLOSED'
-    reliability_score     REAL,             -- e.g. 4.9
+    -- reliability_score     REAL,             -- e.g. 4.9 // wouldn't this be with the bus?
     agency_id             INTEGER,          -- FK -> transit_agency
     CONSTRAINT pk_route PRIMARY KEY (route_id AUTOINCREMENT),
     CONSTRAINT fk_route_agency
@@ -173,8 +174,8 @@ CREATE TABLE IF NOT EXISTS vehicle (
     vehicle_id        INTEGER  NOT NULL,
     vehicle_type      TEXT     NOT NULL,  -- e.g. 'BUS'
     current_location  TEXT,              -- e.g. 'SENECA HILL DRIVE'
-    occupancy_level   INTEGER,           -- number of occupants
-    delay_status      TEXT,              -- e.g. 'LINE 1 - CLOSED'
+    -- occupancy_level   INTEGER,           -- number of occupants  // don't need to store maybe
+    -- delay_status      TEXT,              -- e.g. 'LINE 1 - CLOSED' // don't need to store
     route_id          INTEGER,           -- FK -> route
     CONSTRAINT pk_vehicle PRIMARY KEY (vehicle_id AUTOINCREMENT),
     CONSTRAINT fk_vehicle_route
