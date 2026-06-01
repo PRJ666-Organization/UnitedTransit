@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
   },
   count: {
     fontSize: 14,
-    opacity: 0.6,
+    opacity: 0.8,
   },
   locationRow: {
     flexDirection: 'row',
@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
   dot: {
     fontSize: 10,
     marginRight: 8,
-    opacity: 0.5,
+    opacity: 0.8,
   },
   locationText: {
     fontSize: 14,

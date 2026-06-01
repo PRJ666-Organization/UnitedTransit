@@ -2,16 +2,17 @@ import { mapStyle } from '@/styles/map-style';
 import { BookmarkLocation } from '@/hooks/use-auth';
 import {
   Autocomplete,
-  DirectionsRenderer,
   GoogleMap,
   Marker,
+  Polyline,
   useJsApiLoader,
 } from '@react-google-maps/api';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export default function MapWrapper({
   bookmarkLocations,
   initialRegion,
+  onClearRoute,
 }: {
   bookmarkLocations: BookmarkLocation[];
   initialRegion: {
@@ -20,6 +21,7 @@ export default function MapWrapper({
     latitudeDelta: number;
     longitudeDelta: number;
   };
+  onClearRoute?: () => void;
 }) {
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
@@ -30,86 +32,30 @@ export default function MapWrapper({
   const autoCompleteRef = useRef<any>(null);
 
   const [home, setHome] = useState({ lat: 43.6532, lng: -79.3832 });
-  const [directions, setDirections] = useState<any>(null);
-
-  const goToUserLocation = () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition((position) => {
-      const newHome = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude,
-      };
-      setHome(newHome);
-      mapRef.current?.panTo(newHome);
-      mapRef.current?.setZoom(14);
-    });
-  };
 
   useEffect(() => {
-    goToUserLocation();
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        setHome({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      });
+    }
   }, []);
 
   useEffect(() => {
-    if (bookmarkLocations.length >= 2 && mapRef.current) {
-      const bounds = new (window.google.maps.LatLngBounds)();
-      bookmarkLocations.forEach((loc) => {
-        bounds.extend({ lat: loc.latitude, lng: loc.longitude });
-      });
-      mapRef.current.fitBounds(bounds);
-    }
-  }, [bookmarkLocations]);
+    if (!window.google?.maps || bookmarkLocations.length < 2 || !mapRef.current) return;
+    const bounds = new window.google.maps.LatLngBounds();
+    bookmarkLocations.forEach((loc) => {
+      bounds.extend({ lat: loc.latitude, lng: loc.longitude });
+    });
+    mapRef.current.fitBounds(bounds);
+  }, [bookmarkLocations, isLoaded]);
 
   const onLoad = (map: any) => {
     mapRef.current = map;
   };
-
-  const calculateRoute = (destination: { lat: number; lng: number }) => {
-    if (!window.google || !mapRef.current) return;
-    const service = new google.maps.DirectionsService();
-    service.route(
-      {
-        origin: home,
-        destination,
-        travelMode: google.maps.TravelMode.TRANSIT,
-      },
-      (result, status) => {
-        if (status === 'OK' && result) {
-          setDirections(result);
-        }
-      },
-    );
-  };
-
-  const calculateBookmarkRoute = useCallback(() => {
-    if (!window.google || bookmarkLocations.length < 2) return;
-    const service = new google.maps.DirectionsService();
-
-    const waypoints = bookmarkLocations.slice(1, -1).map((loc) => ({
-      location: { lat: loc.latitude, lng: loc.longitude },
-      stopover: true,
-    }));
-
-    service.route(
-      {
-        origin: { lat: bookmarkLocations[0].latitude, lng: bookmarkLocations[0].longitude },
-        destination: {
-          lat: bookmarkLocations[bookmarkLocations.length - 1].latitude,
-          lng: bookmarkLocations[bookmarkLocations.length - 1].longitude,
-        },
-        waypoints,
-        travelMode: google.maps.TravelMode.DRIVING,
-      },
-      (result, status) => {
-        if (status === 'OK' && result) {
-          setDirections(result);
-        }
-      },
-    );
-  }, [bookmarkLocations]);
-
-  useEffect(() => {
-    calculateBookmarkRoute();
-  }, [calculateBookmarkRoute]);
 
   const onPlaceChanged = () => {
     const place = autoCompleteRef.current.getPlace();
@@ -120,7 +66,6 @@ export default function MapWrapper({
     };
     mapRef.current?.panTo(newCenter);
     mapRef.current?.setZoom(14);
-    calculateRoute(newCenter);
   };
 
   const center = useMemo(() => {
@@ -146,6 +91,11 @@ export default function MapWrapper({
     if (maxDelta < 0.1) return 12;
     return 10;
   }, [bookmarkLocations]);
+
+  const polylineCoords = useMemo(() =>
+    bookmarkLocations.map((loc) => ({ lat: loc.latitude, lng: loc.longitude })),
+    [bookmarkLocations],
+  );
 
   if (loadError) return <div>Map failed to load</div>;
   if (!isLoaded) return <div>Loading map...</div>;
@@ -201,7 +151,7 @@ export default function MapWrapper({
 
         {bookmarkLocations.length > 0 && (
           <button
-            onClick={() => setDirections(null)}
+            onClick={() => onClearRoute?.()}
             style={{
               padding: '10px 12px',
               borderRadius: '8px',
@@ -232,14 +182,13 @@ export default function MapWrapper({
           />
         ))}
 
-        {directions && (
-          <DirectionsRenderer
-            directions={directions}
+        {polylineCoords.length > 1 && (
+          <Polyline
+            path={polylineCoords}
             options={{
-              polylineOptions: {
-                strokeColor: '#4A90E2',
-                strokeWeight: 5,
-              },
+              strokeColor: '#4A90E2',
+              strokeWeight: 4,
+              strokeOpacity: 0.8,
             }}
           />
         )}

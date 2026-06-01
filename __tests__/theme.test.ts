@@ -2,29 +2,29 @@ describe('Theme and Styling', () => {
   it('defines light theme colors', () => {
     const theme = {
       bg: '#eceef1',
-      text: '#11181C',
-      sub: '#687076',
+      text: '#000',
+      sub: '#3d3d3d',
       accent: '#0a7ea4',
       inputBg: '#ffffff',
       border: '#d5d8dc',
     };
 
     expect(theme.bg).toBe('#eceef1');
-    expect(theme.text).toBe('#11181C');
+    expect(theme.text).toBe('#000');
   });
 
   it('defines dark theme colors', () => {
     const theme = {
       bg: '#111318',
-      text: '#ECEDEE',
-      sub: '#9BA1A6',
+      text: '#FFFFFF',
+      sub: '#C0C4C8',
       accent: '#fff',
       inputBg: '#22252b',
       border: '#3a3d3e',
     };
 
     expect(theme.bg).toBe('#111318');
-    expect(theme.text).toBe('#ECEDEE');
+    expect(theme.text).toBe('#FFFFFF');
   });
 
   it('error text color is consistent', () => {

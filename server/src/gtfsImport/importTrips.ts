@@ -17,6 +17,7 @@ export async function importTrips() {
       })
       .on('end', async () => {
         try {
+          await runMutation(`DELETE FROM gtfs_trips`);
           for (const row of rows) {
             await runMutation(
               `

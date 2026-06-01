@@ -7,9 +7,11 @@ import { BookmarkLocation } from '@/hooks/use-auth';
 export default function MapWrapper({
   bookmarkLocations,
   initialRegion,
+  onClearRoute,
 }: {
   bookmarkLocations: BookmarkLocation[];
   initialRegion: Region;
+  onClearRoute?: () => void;
 }) {
   const mapRef = useRef<MapView>(null);
 
@@ -32,15 +34,12 @@ export default function MapWrapper({
       provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
       style={styles.map}
       region={initialRegion}
-      showsUserLocation
-      showsMyLocationButton
     >
       {bookmarkLocations.map((loc, i) => (
         <Marker
-          key={i}
+          key={`${loc.latitude}-${loc.longitude}-${i}`}
           coordinate={loc}
           title={loc.name ?? `Stop ${i + 1}`}
-          description={`${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`}
         />
       ))}
       {bookmarkLocations.length >= 2 && (

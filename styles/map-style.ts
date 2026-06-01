@@ -13,13 +13,13 @@ export const mapStyle = [
     elementType: 'labels.text.fill',
     stylers: [
       {
-        gamma: 0.01,
+        gamma: 0.5,
       },
       {
-        lightness: 20,
+        lightness: 0,
       },
       {
-        weight: '1.39',
+        weight: '2',
       },
       {
         color: '#ffffff',
@@ -31,10 +31,10 @@ export const mapStyle = [
     elementType: 'labels.text.stroke',
     stylers: [
       {
-        weight: '0.96',
+        weight: '2',
       },
       {
-        saturation: '9',
+        saturation: '-100',
       },
       {
         visibility: 'on',

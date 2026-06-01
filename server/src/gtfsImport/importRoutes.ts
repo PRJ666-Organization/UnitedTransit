@@ -17,6 +17,7 @@ export async function importRoutes() {
       })
       .on('end', async () => {
         try {
+          await runMutation(`DELETE FROM gtfs_routes`);
           for (const row of rows) {
             await runMutation(
               `

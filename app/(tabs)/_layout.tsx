@@ -43,7 +43,7 @@ export default function TabLayout() {
                   fontSize: 14,
                   fontWeight: '400',
                   color: theme.text,
-                  opacity: 0.6,
+                  opacity: 0.8,
                   marginTop: 2,
                 }}
               >
@@ -73,9 +73,9 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+         tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
         }}
-      />
-      </Tabs>
+       />
+       </Tabs>
   );
 }

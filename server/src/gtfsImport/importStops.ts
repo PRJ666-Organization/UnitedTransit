@@ -17,6 +17,7 @@ export async function importStops() {
       })
       .on('end', async () => {
         try {
+          await runMutation(`DELETE FROM gtfs_stops`);
           for (const row of rows) {
             await runMutation(
               `

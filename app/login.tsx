@@ -20,8 +20,8 @@ export default function LoginScreen() {
   const isDark = colorScheme === 'dark';
 
   const theme = isDark
-    ? { bg: '#111318', text: '#ECEDEE', sub: '#9BA1A6', accent: '#fff', inputBg: '#22252b', border: '#3a3d3e' }
-    : { bg: '#eceef1', text: '#11181C', sub: '#687076', accent: '#0a7ea4', inputBg: '#ffffff', border: '#d5d8dc' };
+    ? { bg: '#111318', text: '#FFFFFF', sub: '#C0C4C8', accent: '#fff', inputBg: '#22252b', border: '#3a3d3e' }
+    : { bg: '#eceef1', text: '#000', sub: '#3d3d3d', accent: '#0a7ea4', inputBg: '#ffffff', border: '#d5d8dc' };
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

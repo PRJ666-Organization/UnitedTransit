@@ -70,8 +70,8 @@ export default function BookmarksScreen() {
       ? {
           bg: '#111318',
           card: '#1a1d23',
-          text: '#ECEDEE',
-          sub: '#9BA1A6',
+          text: '#FFFFFF',
+          sub: '#FFFFFF',
           accent: '#fff',
           inputBg: '#22252b',
           border: '#3a3d3e',
@@ -79,8 +79,8 @@ export default function BookmarksScreen() {
       : {
           bg: '#eceef1',
           card: '#f6f7f8',
-          text: '#11181C',
-          sub: '#687076',
+          text: '#000',
+          sub: '#3d3d3d',
           accent: '#0a7ea4',
           inputBg: '#ffffff',
           border: '#d5d8dc',
@@ -315,7 +315,7 @@ export default function BookmarksScreen() {
           <ThemedText type="subtitle" style={{ marginBottom: 8 }}>
             Not signed in
           </ThemedText>
-          <ThemedText style={{ opacity: 0.6, textAlign: 'center', marginBottom: 16 }}>
+          <ThemedText style={{ opacity: 0.8, textAlign: 'center', marginBottom: 16 }}>
             Sign in to save bookmarks.
           </ThemedText>
           <Pressable
@@ -346,7 +346,7 @@ export default function BookmarksScreen() {
           <ThemedText type="subtitle" style={{ marginBottom: 8 }}>
             No bookmarks yet
           </ThemedText>
-          <ThemedText style={{ opacity: 0.6, textAlign: 'center' }}>
+          <ThemedText style={{ opacity: 0.8, textAlign: 'center' }}>
             Tap + to create a bookmark.
             {'\n'}Long-press a bookmark to delete it.
           </ThemedText>
