@@ -1,16 +1,26 @@
 import { BookmarkLocation, useAuth } from '@/hooks/use-auth';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Region } from 'react-native-maps';
 import MapWrapper from '../../components/map-wrapper';
 import RouteInformation from '../../components/route-information';
+
+type RoutePolyline = {
+  steps: {
+    mode: 'WALKING' | 'TRANSIT';
+    polyline?: string;
+    color?: string;
+  }[];
+};
 
 export default function HomeScreen() {
   const { activeBookmarkLocations, setActiveBookmarkLocations, user } = useAuth();
   const router = useRouter();
   const [displayLocations, setDisplayLocations] = useState<BookmarkLocation[]>([]);
   const [tripName, setTripName] = useState<string>('');
+  const [allRoutePolylines, setAllRoutePolylines] = useState<RoutePolyline[]>([]);
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState<number>(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -27,6 +37,9 @@ export default function HomeScreen() {
   const clearRoute = useCallback(() => {
     setActiveBookmarkLocations([]);
     setTripName('');
+    setDisplayLocations([]);
+    setAllRoutePolylines([]);
+    setSelectedRouteIndex(0);
   }, [setActiveBookmarkLocations]);
 
   const region = useMemo((): Region => {
@@ -60,6 +73,26 @@ export default function HomeScreen() {
     };
   }, [displayLocations]);
 
+  // Callback for when a destination is selected from the map search
+  const handleDestinationSelected = useCallback((origin: BookmarkLocation, destination: BookmarkLocation) => {
+    setDisplayLocations([origin, destination]);
+    setTripName('Route to Destination');
+    setSelectedRouteIndex(0); // Reset to first route
+  }, []);
+
+  // Callback for when routes are loaded
+  const handleRoutesLoaded = useCallback((polylines: RoutePolyline[]) => {
+    setAllRoutePolylines(polylines);
+    setSelectedRouteIndex(0); // Select first route by default
+  }, []);
+
+  // Get the polyline for the selected route only
+  const selectedRoutePolyline = useMemo(() => {
+    if (allRoutePolylines.length === 0) return [];
+    const idx = Math.min(selectedRouteIndex, allRoutePolylines.length - 1);
+    return [allRoutePolylines[idx]];
+  }, [allRoutePolylines, selectedRouteIndex]);
+
   console.log('[HomeScreen render] displayLocations:', displayLocations.length);
   return (
     <View style={styles.container}>
@@ -67,19 +100,18 @@ export default function HomeScreen() {
         bookmarkLocations={displayLocations}
         initialRegion={region}
         onClearRoute={clearRoute}
+        onDestinationSelected={handleDestinationSelected}
+        routePolylines={selectedRoutePolyline}
+        showSignIn={!user}
+        onSignIn={() => router.push('/login')}
       />
-      {!user && (
-        <TouchableOpacity
-          style={styles.loginButton}
-          onPress={() => router.push('/login')}
-        >
-          <Text style={styles.loginButtonText}>Sign In</Text>
-        </TouchableOpacity>
-      )}
       <RouteInformation
         locations={displayLocations}
         name={tripName || undefined}
         onClear={clearRoute}
+        onRoutesLoaded={handleRoutesLoaded}
+        onRouteSelected={setSelectedRouteIndex}
+        selectedRouteIndex={selectedRouteIndex}
       />
     </View>
   );
@@ -88,25 +120,5 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  loginButton: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 40,
-    right: 16,
-    backgroundColor: '#0a7ea4',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
-    zIndex: 10,
-  },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
   },
 });

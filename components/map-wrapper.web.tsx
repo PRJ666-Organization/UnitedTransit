@@ -9,10 +9,64 @@ import {
 } from '@react-google-maps/api';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+type RoutePolyline = {
+  steps: {
+    mode: 'WALKING' | 'TRANSIT';
+    polyline?: string;
+    color?: string;
+  }[];
+};
+
+// Decode Google encoded polyline
+function decodePolyline(encoded: string): { lat: number; lng: number }[] {
+  if (!encoded) return [];
+
+  const coords: { lat: number; lng: number }[] = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let byte: number;
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    lat += result & 1 ? ~(result >> 1) : result >> 1;
+
+    shift = 0;
+    result = 0;
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    lng += result & 1 ? ~(result >> 1) : result >> 1;
+
+    coords.push({
+      lat: lat / 1e5,
+      lng: lng / 1e5,
+    });
+  }
+
+  return coords;
+}
+
 export default function MapWrapper({
   bookmarkLocations,
   initialRegion,
   onClearRoute,
+  onDestinationSelected,
+  routePolylines,
+  showSignIn,
+  onSignIn,
 }: {
   bookmarkLocations: BookmarkLocation[];
   initialRegion: {
@@ -22,6 +76,10 @@ export default function MapWrapper({
     longitudeDelta: number;
   };
   onClearRoute?: () => void;
+  onDestinationSelected?: (origin: BookmarkLocation, destination: BookmarkLocation) => void;
+  routePolylines?: RoutePolyline[];
+  showSignIn?: boolean;
+  onSignIn?: () => void;
 }) {
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
@@ -31,7 +89,7 @@ export default function MapWrapper({
   const mapRef = useRef<any>(null);
   const autoCompleteRef = useRef<any>(null);
 
-  const [home, setHome] = useState({ lat: 43.6532, lng: -79.3832 });
+  const [home, setHome] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -60,16 +118,33 @@ export default function MapWrapper({
   const onPlaceChanged = () => {
     const place = autoCompleteRef.current.getPlace();
     if (!place.geometry || !place.geometry.location) return;
-    const newCenter = {
-      lat: place.geometry.location.lat(),
-      lng: place.geometry.location.lng(),
+
+    const destination: BookmarkLocation = {
+      latitude: place.geometry.location.lat(),
+      longitude: place.geometry.location.lng(),
+      name: place.formatted_address || place.name || 'Selected Destination',
     };
-    mapRef.current?.panTo(newCenter);
-    mapRef.current?.setZoom(14);
+
+    // If we have the user's location and a callback, create a route
+    if (home && onDestinationSelected) {
+      const origin: BookmarkLocation = {
+        latitude: home.lat,
+        longitude: home.lng,
+        name: 'Current Location',
+      };
+      onDestinationSelected(origin, destination);
+    } else if (mapRef.current) {
+      // Fallback: just pan to the location
+      mapRef.current.panTo({ lat: destination.latitude, lng: destination.longitude });
+      mapRef.current.setZoom(14);
+    }
   };
 
   const center = useMemo(() => {
-    if (bookmarkLocations.length === 0) return home;
+    if (bookmarkLocations.length === 0) {
+      // Default to home or a fallback
+      return home || { lat: 43.6532, lng: -79.3832 };
+    }
     const lats = bookmarkLocations.map((l) => l.latitude);
     const lngs = bookmarkLocations.map((l) => l.longitude);
     return {
@@ -97,6 +172,23 @@ export default function MapWrapper({
     [bookmarkLocations],
   );
 
+  // Build polylines from route data
+  const routePolylineCoords = useMemo(() => {
+    if (!routePolylines || routePolylines.length === 0) return [];
+
+    return routePolylines.flatMap(route =>
+      route.steps.map(step => {
+        if (!step.polyline) return null;
+        const coords = decodePolyline(step.polyline);
+        return {
+          coords,
+          color: step.mode === 'WALKING' ? '#666666' : step.color || '#4A90E2',
+          isWalking: step.mode === 'WALKING',
+        };
+      }).filter(Boolean)
+    ).flat();
+  }, [routePolylines]);
+
   if (loadError) return <div>Map failed to load</div>;
   if (!isLoaded) return <div>Loading map...</div>;
 
@@ -114,6 +206,23 @@ export default function MapWrapper({
           alignItems: 'center',
         }}
       >
+        {showSignIn && (
+          <button
+            onClick={onSignIn}
+            style={{
+              padding: '10px 16px',
+              borderRadius: '8px',
+              border: '1px solid #ccc',
+              background: '#fff',
+              cursor: 'pointer',
+              fontWeight: '600',
+              fontSize: '14px',
+            }}
+          >
+            Sign In
+          </button>
+        )}
+
         <Autocomplete
           onLoad={(ref) => (autoCompleteRef.current = ref)}
           onPlaceChanged={onPlaceChanged}
@@ -123,7 +232,7 @@ export default function MapWrapper({
         >
           <input
             type="text"
-            placeholder="Search a location"
+            placeholder="Search destination..."
             style={{
               width: '300px',
               padding: '10px',
@@ -133,21 +242,23 @@ export default function MapWrapper({
           />
         </Autocomplete>
 
-        <button
-          onClick={() => {
-            mapRef.current?.panTo(home);
-            mapRef.current?.setZoom(14);
-          }}
-          style={{
-            padding: '10px 12px',
-            borderRadius: '8px',
-            border: '1px solid #ccc',
-            background: '#fff',
-            cursor: 'pointer',
-          }}
-        >
-          Home
-        </button>
+        {home && (
+          <button
+            onClick={() => {
+              mapRef.current?.panTo(home);
+              mapRef.current?.setZoom(14);
+            }}
+            style={{
+              padding: '10px 12px',
+              borderRadius: '8px',
+              border: '1px solid #ccc',
+              background: '#fff',
+              cursor: 'pointer',
+            }}
+          >
+            Home
+          </button>
+        )}
 
         {bookmarkLocations.length > 0 && (
           <button
@@ -182,15 +293,38 @@ export default function MapWrapper({
           />
         ))}
 
-        {polylineCoords.length > 1 && (
-          <Polyline
-            path={polylineCoords}
-            options={{
-              strokeColor: '#4A90E2',
-              strokeWeight: 4,
-              strokeOpacity: 0.8,
-            }}
-          />
+        {/* Draw route polylines if available */}
+        {routePolylineCoords.length > 0 ? (
+          routePolylineCoords.map((pl, idx) => (
+            <Polyline
+              key={idx}
+              path={pl!.coords}
+              options={{
+                strokeColor: pl!.color,
+                strokeWeight: pl!.isWalking ? 2 : 4,
+                strokeOpacity: 0.8,
+                icons: pl!.isWalking ? [
+                  {
+                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 2 },
+                    offset: '0',
+                    repeat: '10px',
+                  },
+                ] : undefined,
+              }}
+            />
+          ))
+        ) : (
+          // Fallback: direct line if no polylines
+          polylineCoords.length > 1 && (
+            <Polyline
+              path={polylineCoords}
+              options={{
+                strokeColor: '#4A90E2',
+                strokeWeight: 4,
+                strokeOpacity: 0.8,
+              }}
+            />
+          )
         )}
       </GoogleMap>
     </div>

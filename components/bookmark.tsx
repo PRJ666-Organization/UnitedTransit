@@ -19,7 +19,7 @@ export type BookmarkProps = {
 
 export default function Bookmark({ name, locations, onPress, onDelete }: BookmarkProps) {
   const theme = useColorScheme() === 'dark'
-    ? { cardBg: '#1e2123' }
+    ? { cardBg: '#2a2d33' }
     : { cardBg: '#ffffff' };
 
   return (

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { BookmarkLocation } from '@/hooks/use-auth';
@@ -8,6 +8,9 @@ export type RouteInformationProps = {
   locations: BookmarkLocation[];
   name?: string;
   onClear: () => void;
+  onRoutesLoaded?: (polylines: { steps: { mode: 'WALKING' | 'TRANSIT'; polyline?: string; color?: string }[] }[]) => void;
+  onRouteSelected?: (routeIndex: number) => void;
+  selectedRouteIndex?: number;
 };
 
 type TransitStep = {
@@ -23,6 +26,10 @@ type TransitStep = {
   };
   from?: string;
   to?: string;
+  numStops?: number;
+  polyline?: string;
+  departureTime?: string;
+  arrivalTime?: string;
 };
 
 type TransitLeg = {
@@ -38,17 +45,54 @@ type RouteOption = {
   legs: TransitLeg[];
 };
 
+type TransitFilter = 'all' | 'subway' | 'bus';
+
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
-export default function RouteInformation({ locations, name, onClear }: RouteInformationProps) {
+// Map transit types to categories - including all possible vehicle types from Google
+const SUBWAY_VEHICLE_TYPES = ['SUBWAY_TRAIN', 'METRO_RAIL', 'HEAVY_RAIL', 'COMMUTER_TRAIN', 'HIGH_SPEED_TRAIN', 'RAIL'];
+const BUS_VEHICLE_TYPES = ['BUS', 'TROLLEYBUS', 'TROLLEY_BUS'];
+
+// Check if a route contains a specific transit type based on vehicle type
+function routeHasVehicleType(leg: TransitLeg, vehicleTypes: string[]): boolean {
+  const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
+  // The icon in the data should match, but we also check vehicle type if available
+  return transitSteps.some(s => {
+    const icon = s.transitLine?.icon || '🚌';
+    // Check by icon
+    if (icon === '🚇' || icon === '🚆') return vehicleTypes === SUBWAY_VEHICLE_TYPES || vehicleTypes.some(t => SUBWAY_VEHICLE_TYPES.includes(t));
+    if (icon === '🚌' || icon === '⛴️') return vehicleTypes === BUS_VEHICLE_TYPES || vehicleTypes.some(t => BUS_VEHICLE_TYPES.includes(t));
+    return false;
+  });
+}
+
+function routeContainsSubway(leg: TransitLeg): boolean {
+  const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
+  // Check by icon (🚇 = subway, 🚆 = train/rail, 🚋 = tram)
+  return transitSteps.some(s => {
+    const icon = s.transitLine?.icon || '';
+    return icon === '🚇' || icon === '🚆';
+  });
+}
+
+function routeContainsBus(leg: TransitLeg): boolean {
+  const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
+  return transitSteps.some(s => {
+    const icon = s.transitLine?.icon || '';
+    return icon === '🚌' || icon === '⛴️';
+  });
+}
+
+export default function RouteInformation({ locations, name, onClear, onRoutesLoaded, onRouteSelected, selectedRouteIndex }: RouteInformationProps) {
   const isDark = useColorScheme() === 'dark';
   const colors = isDark
-    ? { bg: '#1a1d21', text: '#FFFFFF', sub: '#D0D4D8', border: '#2e3135', accent: '#4a9eff', cardBg: '#24272d', cardBorder: '#35383e' }
-    : { bg: '#ffffff', text: '#111', sub: '#444', border: '#e4e5e7', accent: '#0a7ea4', cardBg: '#f5f7fa', cardBorder: '#dde0e4' };
+    ? { bg: '#151718', text: '#FFFFFF', sub: '#A0A4A8', border: '#3d4148', accent: '#4a9eff', cardBg: '#2a2d33', cardBorder: '#404450' }
+    : { bg: '#ffffff', text: '#111', sub: '#555555', border: '#d0d0d0', accent: '#0a7ea4', cardBg: '#f8f9fa', cardBorder: '#dde0e4' };
 
   const [routes, setRoutes] = useState<RouteOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [transitFilter, setTransitFilter] = useState<TransitFilter>('all');
 
   const fetchDirections = useCallback(async () => {
     if (locations.length < 2) return;
@@ -84,8 +128,56 @@ export default function RouteInformation({ locations, name, onClear }: RouteInfo
     } else {
       setRoutes([]);
       setError(null);
+      onRoutesLoaded?.([]);
     }
   }, [locations, fetchDirections]);
+
+  // Notify parent when routes are loaded
+  useEffect(() => {
+    if (routes.length > 0 && onRoutesLoaded) {
+      const polylines = routes.map(route => ({
+        steps: route.legs[0]?.steps.map(step => ({
+          mode: step.mode,
+          polyline: step.polyline,
+          color: step.transitLine?.color,
+        })) || [],
+      }));
+      onRoutesLoaded(polylines);
+    }
+  }, [routes, onRoutesLoaded]);
+
+  // Filter routes based on selected transit type
+  const filteredRoutes = useMemo(() => {
+    if (transitFilter === 'all') return routes;
+
+    return routes.filter(route => {
+      const leg = route.legs[0];
+      if (!leg) return false;
+
+      if (transitFilter === 'subway') {
+        return routeContainsSubway(leg);
+      } else if (transitFilter === 'bus') {
+        return routeContainsBus(leg);
+      }
+      return true;
+    });
+  }, [routes, transitFilter]);
+
+  // Count routes by type
+  const routeCounts = useMemo(() => {
+    let subway = 0;
+    let bus = 0;
+
+    routes.forEach(route => {
+      const leg = route.legs[0];
+      if (!leg) return;
+
+      if (routeContainsSubway(leg)) subway++;
+      if (routeContainsBus(leg)) bus++;
+    });
+
+    return { subway, bus };
+  }, [routes]);
 
   if (locations.length === 0) {
     return null;
@@ -102,24 +194,88 @@ export default function RouteInformation({ locations, name, onClear }: RouteInfo
         </TouchableOpacity>
       </View>
 
+      {/* Transit Type Filter */}
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[styles.filterBtn, {
+            backgroundColor: transitFilter === 'all' ? colors.accent : isDark ? '#3a3d42' : '#e8e8e8',
+          }]}
+          onPress={() => setTransitFilter('all')}
+        >
+          <ThemedText style={[styles.filterText, { color: transitFilter === 'all' ? '#fff' : colors.text }]}>
+            All
+          </ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterBtn, {
+            backgroundColor: transitFilter === 'subway' ? colors.accent : isDark ? '#3a3d42' : '#e8e8e8',
+          }]}
+          onPress={() => setTransitFilter('subway')}
+        >
+          <ThemedText style={[styles.filterText, { color: transitFilter === 'subway' ? '#fff' : colors.text }]}>
+            🚇 Metro
+          </ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterBtn, {
+            backgroundColor: transitFilter === 'bus' ? colors.accent : isDark ? '#3a3d42' : '#e8e8e8',
+          }]}
+          onPress={() => setTransitFilter('bus')}
+        >
+          <ThemedText style={[styles.filterText, { color: transitFilter === 'bus' ? '#fff' : colors.text }]}>
+            🚌 Bus
+          </ThemedText>
+        </TouchableOpacity>
+      </View>
+
       {loading && (
         <View style={styles.loadingContainer}>
           <ThemedText style={[styles.loadingText, { color: colors.sub }]}>Finding transit routes...</ThemedText>
         </View>
       )}
 
-      {error && routes.length === 0 && (
+      {error && filteredRoutes.length === 0 && (
         <View style={styles.errorContainer}>
           <ThemedText style={[styles.errorText, { color: '#e74c3c' }]}>{error}</ThemedText>
         </View>
       )}
 
-      {routes.map((route, routeIndex) => {
+      {!loading && filteredRoutes.length === 0 && routes.length > 0 && (
+        <View style={styles.errorContainer}>
+          <ThemedText style={[styles.errorText, { color: colors.sub }]}>
+            No {transitFilter === 'subway' ? 'metro/subway' : transitFilter === 'bus' ? 'bus' : ''} routes found for this trip.
+          </ThemedText>
+        </View>
+      )}
+
+      {filteredRoutes.map((route, routeIndex) => {
         const leg = route.legs[0];
         if (!leg) return null;
-        const modes = leg.steps.filter(s => s.mode === 'TRANSIT').map(s => s.transitLine?.icon).join(' ');
+        const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
+        const modes = transitSteps.map(s => s.transitLine?.icon).join(' ');
+
+        // Build a summary of transit lines with their names
+        const lineSummary = transitSteps.map(s => {
+          const name = s.transitLine?.shortName || s.instruction;
+          return name;
+        }).join(' → ');
+
+        const isSelected = selectedRouteIndex === routeIndex;
+
         return (
-          <View key={routeIndex} style={[styles.routeCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+          <TouchableOpacity
+            key={routeIndex}
+            style={[
+              styles.routeCard,
+              {
+                backgroundColor: isSelected ? (isDark ? '#3d4148' : '#e8f4fc') : colors.cardBg,
+                borderColor: isSelected ? colors.accent : colors.cardBorder,
+                borderWidth: isSelected ? 2 : 1,
+              },
+            ]}
+            onPress={() => onRouteSelected?.(routeIndex)}
+            activeOpacity={0.7}
+          >
             <View style={[styles.routeHeader, { borderBottomColor: colors.border }]}>
               <View style={styles.routeTitleRow}>
                 <ThemedText style={[styles.routeModes, { color: colors.text }]}>{modes}</ThemedText>
@@ -138,6 +294,15 @@ export default function RouteInformation({ locations, name, onClear }: RouteInfo
                 )}
               </View>
             </View>
+
+            {/* Transit Line Summary */}
+            {lineSummary && (
+              <View style={styles.lineSummaryContainer}>
+                <ThemedText style={[styles.lineSummaryText, { color: colors.text }]}>
+                  {lineSummary}
+                </ThemedText>
+              </View>
+            )}
 
             {leg.steps.map((step, stepIndex) => (
               <View key={stepIndex} style={styles.stepRow}>
@@ -159,11 +324,36 @@ export default function RouteInformation({ locations, name, onClear }: RouteInfo
                         <View style={[styles.lineBadge, { backgroundColor: step.transitLine.color }]}>
                           <ThemedText style={styles.lineName}>{step.transitLine.shortName}</ThemedText>
                         </View>
-                        {step.transitLine.name && step.transitLine.name !== step.transitLine.shortName && (
-                          <ThemedText style={[styles.agencyName, { color: colors.sub }]}>
-                            {step.transitLine.name}
+                        {step.numStops !== undefined && (
+                          <ThemedText style={[styles.stopsText, { color: colors.sub }]}>
+                            {step.numStops} stop{step.numStops !== 1 ? 's' : ''}
                           </ThemedText>
                         )}
+                      </View>
+                    )}
+
+                    {/* Show departure time for transit steps */}
+                    {step.mode === 'TRANSIT' && step.departureTime && (
+                      <View style={styles.departureInfo}>
+                        <ThemedText style={[styles.departureText, { color: colors.accent, fontWeight: '600' }]}>
+                          Depart: {step.departureTime}
+                        </ThemedText>
+                        {step.arrivalTime && (
+                          <ThemedText style={[styles.departureText, { color: colors.sub }]}>
+                            Arrive: {step.arrivalTime}
+                          </ThemedText>
+                        )}
+                      </View>
+                    )}
+
+                    {step.from && step.to && (
+                      <View style={styles.stopInfo}>
+                        <ThemedText style={[styles.stopText, { color: colors.sub }]}>
+                          From: {step.from}
+                        </ThemedText>
+                        <ThemedText style={[styles.stopText, { color: colors.sub }]}>
+                          To: {step.to}
+                        </ThemedText>
                       </View>
                     )}
 
@@ -184,7 +374,7 @@ export default function RouteInformation({ locations, name, onClear }: RouteInfo
                 <View style={[styles.stepLine, { borderColor: colors.border }]} />
               </View>
             ))}
-          </View>
+          </TouchableOpacity>
         );
       })}
     </ScrollView>
@@ -213,72 +403,99 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
     paddingBottom: 10,
     borderBottomWidth: 1,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
+    fontWeight: '600',
   },
   closeButton: {
-    padding: 4,
+    padding: 6,
   },
   closeText: {
-    fontSize: 20,
+    fontSize: 22,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  filterBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#e0e0e0',
+  },
+  filterText: {
+    fontSize: 15,
+    fontWeight: '500',
   },
   routeCard: {
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    padding: 14,
+    padding: 16,
     marginBottom: 12,
   },
   routeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
-    paddingBottom: 8,
+    marginBottom: 10,
+    paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   routeTitleRow: {
     flex: 1,
-    marginRight: 8,
+    marginRight: 10,
   },
   routeModes: {
-    fontSize: 15,
-    marginBottom: 2,
+    fontSize: 20,
+    marginBottom: 4,
   },
   routeSummary: {
-    fontSize: 13,
+    fontSize: 15,
+    fontWeight: '500',
   },
   routeTimeRow: {
     alignItems: 'flex-end',
   },
   routeDuration: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '700',
   },
   routeTimeRange: {
-    fontSize: 11,
-    marginTop: 2,
+    fontSize: 13,
+    marginTop: 3,
+  },
+  lineSummaryContainer: {
+    marginTop: 10,
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  lineSummaryText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   loadingContainer: {
     paddingVertical: 16,
     alignItems: 'center',
   },
   loadingText: {
-    fontSize: 14,
+    fontSize: 16,
     fontStyle: 'italic',
   },
   errorContainer: {
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   errorText: {
-    fontSize: 13,
+    fontSize: 15,
   },
   stepRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    marginTop: 6,
   },
   stepLeft: {
     flexDirection: 'row',
@@ -286,60 +503,82 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconContainer: {
-    width: 24,
-    height: 24,
+    width: 30,
+    height: 30,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
   stepIcon: {
-    fontSize: 14,
+    fontSize: 18,
   },
   stepContent: {
     flex: 1,
     marginTop: 2,
   },
   stepHeader: {
-    marginBottom: 2,
+    marginBottom: 4,
   },
   stepTitle: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: '500',
   },
   transitInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
+    gap: 8,
+    marginBottom: 4,
+    marginTop: 4,
   },
   lineBadge: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
   },
   lineName: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 14,
     fontWeight: '700',
   },
+  stopsText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  stopInfo: {
+    marginBottom: 4,
+    marginTop: 2,
+  },
+  stopText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  departureInfo: {
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  departureText: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
   agencyName: {
-    fontSize: 10,
+    fontSize: 13,
     fontStyle: 'italic',
   },
   stepDetails: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
+    marginTop: 4,
   },
   stepMeta: {
-    fontSize: 10,
-    lineHeight: 13,
+    fontSize: 13,
+    lineHeight: 16,
   },
   stepLine: {
     position: 'absolute',
-    left: 11,
-    top: 24,
-    bottom: -6,
+    left: 14,
+    top: 30,
+    bottom: -8,
     width: 1,
     borderStyle: 'dashed',
   },

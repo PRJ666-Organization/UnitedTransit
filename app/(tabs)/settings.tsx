@@ -11,8 +11,8 @@ export default function SettingsScreen() {
   const isDark = colorScheme === 'dark';
 
   const theme = isDark
-    ? { bg: '#151718', text: '#FFFFFF', sub: '#FFFFFF', accent: '#fff', cardBg: '#1e2123', border: '#3a3d3e' }
-    : { bg: '#f5f5f5', text: '#000', sub: '#3d3d3d', accent: '#0a7ea4', cardBg: '#ffffff', border: '#e0e0e0' };
+    ? { bg: '#151718', text: '#FFFFFF', sub: '#A0A4A8', accent: '#fff', cardBg: '#2a2d33', border: '#3d4148' }
+    : { bg: '#f5f5f5', text: '#000', sub: '#555555', accent: '#0a7ea4', cardBg: '#ffffff', border: '#d0d0d0' };
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.bg }]}>

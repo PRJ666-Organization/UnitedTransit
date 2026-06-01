@@ -1,11 +1,46 @@
 import { Router, Request, Response } from 'express';
 import https from 'https';
+import { runQuery } from '../db/database';
 
 const router = Router();
 
 function getApiKey(): string {
   return process.env.GOOGLE_MAPS_API_KEY ||
     process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+}
+
+// Cache for GTFS routes
+let gtfsRoutesCache: Map<string, { shortName: string; longName: string; color: string; type: number }> | null = null;
+
+async function loadGtfsRoutes(): Promise<Map<string, { shortName: string; longName: string; color: string; type: number }>> {
+  if (gtfsRoutesCache) return gtfsRoutesCache;
+
+  try {
+    const routes = await runQuery(
+      `SELECT route_id, route_short_name, route_long_name, route_type, route_color FROM gtfs_routes`
+    );
+    gtfsRoutesCache = new Map();
+    for (const route of routes) {
+      gtfsRoutesCache.set(route.route_short_name?.toLowerCase() || '', {
+        shortName: route.route_short_name || '',
+        longName: route.route_long_name || '',
+        color: route.route_color ? `#${route.route_color}` : '#0a7ea4',
+        type: route.route_type || 3, // Default to bus
+      });
+    }
+    return gtfsRoutesCache;
+  } catch (err) {
+    console.error('[Transit Route] Failed to load GTFS routes:', err);
+    return new Map();
+  }
+}
+
+function getGtfsRouteInfo(
+  shortName: string,
+  gtfsRoutes: Map<string, { shortName: string; longName: string; color: string; type: number }>
+): { shortName: string; longName: string; color: string; type: number } | null {
+  const key = shortName?.toLowerCase() || '';
+  return gtfsRoutes.get(key) || null;
 }
 
 function formatTimeHHMM(raw: string): string {
@@ -30,11 +65,17 @@ function distStr(m: number): string {
 const TRANSIT_TYPES: Record<string, { icon: string; name: string }> = {
   BUS: { icon: '🚌', name: 'Bus' },
   RAIL: { icon: '🚆', name: 'Rail' },
+  SUBWAY: { icon: '🚇', name: 'Subway' },
   SUBWAY_TRAIN: { icon: '🚇', name: 'Subway' },
+  METRO: { icon: '🚇', name: 'Metro' },
   TRAM: { icon: '🚋', name: 'Streetcar' },
   TROLLEYBUS: { icon: '🚌', name: 'Trolleybus' },
   TROLLEY_BUS: { icon: '🚌', name: 'Trolleybus' },
   FERRY: { icon: '⛴️', name: 'Ferry' },
+  HEAVY_RAIL: { icon: '🚆', name: 'Train' },
+  METRO_RAIL: { icon: '🚇', name: 'Metro' },
+  COMMUTER_TRAIN: { icon: '🚆', name: 'Commuter' },
+  HIGH_SPEED_TRAIN: { icon: '🚆', name: 'High Speed' },
 };
 
 function transitInfo(type: string) {
@@ -60,6 +101,10 @@ interface Step {
   transitLine?: { name: string; shortName: string; color: string; icon: string };
   from?: string;
   to?: string;
+  numStops?: number;
+  polyline?: string; // Encoded polyline for this step
+  departureTime?: string;
+  arrivalTime?: string;
 }
 
 interface Leg {
@@ -92,32 +137,46 @@ router.get('/', async (req: Request, res: Response) => {
       `&mode=transit` +
       `&departure_time=${departureTime}`;
 
-    const transitModes = ['any', 'subway', 'train', 'rail', 'bus', 'tram'];
+    // Query multiple transit modes to get comprehensive results
+    const transitModes = ['bus', 'subway', 'train', 'tram', 'rail'];
     const transitPrefs = ['less_walking', 'fewer_transfers'];
     const allRawRoutes: any[] = [];
     const seenSignatures = new Set<string>();
 
-    for (const mode of transitModes) {
+    // Load GTFS routes for enrichment
+    const gtfsRoutes = await loadGtfsRoutes();
+    console.log(`[Transit Route] Loaded ${gtfsRoutes.size} GTFS routes`);
+
+    // Also query without specific mode to get "best" routes
+    const modeQueries = ['', ...transitModes];
+
+    for (const mode of modeQueries) {
       for (const pref of transitPrefs) {
         try {
-          const reqUrl = `${base}&transit_mode=${mode}&transit_routing_preference=${pref}&key=${apiKey}`;
+          const modeParam = mode ? `&transit_mode=${mode}` : '';
+          const reqUrl = `${base}${modeParam}&transit_routing_preference=${pref}&key=${apiKey}`;
           const raw = await fetchGoogle(reqUrl);
           const parsed = JSON.parse(raw.toString());
 
           if (parsed.status === 'OK' && parsed.routes?.length) {
             for (const r of parsed.routes) {
+              // Create signature based on transit line identifiers
               const transitSteps = r.legs?.[0]?.steps
-                .filter((s: any) => s.travel_mode === 'TRANSIT')
-                .map((s: any) => `${s.transit?.line?.vehicle?.type}(${s.transit?.line?.short_name})`)
-                .join(',') || 'none';
+                ?.filter((s: any) => s.travel_mode === 'TRANSIT')
+                ?.map((s: any) => {
+                  const line = s.transit?.line;
+                  const type = line?.vehicle?.type || 'BUS';
+                  const shortName = line?.short_name || line?.name || '';
+                  return `${type}:${shortName}`;
+                }) || [];
 
-              const key = `${transitSteps}`;
+              const key = transitSteps.join('|');
               const modes = r.legs?.[0]?.steps
-                .filter((s: any) => s.travel_mode === 'TRANSIT')
-                .map((s: any) => s.transit?.line?.vehicle?.type)
-                .join(',') || '';
+                ?.filter((s: any) => s.travel_mode === 'TRANSIT')
+                ?.map((s: any) => s.transit?.line?.vehicle?.type)
+                ?.join(',') || '';
 
-              console.log(`[Transit Route] mode=${mode} pref=${pref} summary="${r.summary}" types=${modes} transit=${transitSteps}`);
+              console.log(`[Transit Route] mode=${mode || 'any'} pref=${pref} summary="${r.summary}" types=${modes} key=${key}`);
 
               if (!seenSignatures.has(key)) {
                 seenSignatures.add(key);
@@ -126,7 +185,7 @@ router.get('/', async (req: Request, res: Response) => {
             }
           }
         } catch (err) {
-          console.error(`[Transit Route] mode=${mode} pref=${pref} failed:`, err);
+          console.error(`[Transit Route] mode=${mode || 'any'} pref=${pref} failed:`, err);
         }
       }
     }
@@ -151,48 +210,104 @@ router.get('/', async (req: Request, res: Response) => {
             steps.push({
               mode: 'WALKING',
               instruction: step.html_instructions
-                .replace(/<[^>]*>/g, '')
-                .replace(/&[^;]*;/g, ' '),
+                ?.replace(/<[^>]*>/g, '')
+                ?.replace(/&[^;]*;/g, ' ') || 'Walk',
               distance: distStr(step.distance.value),
               duration: `${durationMin} min`,
+              polyline: step.polyline?.points,
             });
           } else if (step.travel_mode === 'TRANSIT') {
-            const info = transitInfo(step.transit?.line?.vehicle?.type || 'BUS');
-            const shortName = step.transit?.line?.short_name || '';
-            const longName = step.transit?.line?.name || '';
-            const colorHex = step.transit?.line?.color
-              ? `#${step.transit.line.color}`
-              : '#0a7ea4';
+            // Google Maps API uses 'transit_details' (with underscore)
+            const transitData = step.transit_details || {};
+            const line = transitData.line || {};
 
-            const fromStop = step.start_location
-              ? `${step.start_location.lat.toFixed(4)}, ${step.start_location.lng.toFixed(4)}`
-              : undefined;
-            const toStop = step.end_location
-              ? `${step.end_location.lat.toFixed(4)}, ${step.end_location.lng.toFixed(4)}`
-              : undefined;
+            const vehicleType = line.vehicle?.type || 'BUS';
+            const info = transitInfo(vehicleType);
+            let shortName = line.short_name || '';
+            const longName = line.name || '';
+            let colorHex = line.color || '#0a7ea4';
+
+            // Get stop names
+            const departureStop = transitData.departure_stop?.name || '';
+            const arrivalStop = transitData.arrival_stop?.name || '';
+            const numStops = transitData.num_stops;
+
+            // Get departure/arrival times for this step
+            const stepDepTime = transitData.departure_time?.text;
+            const stepArrTime = transitData.arrival_time?.text;
+
+            // Get agency info
+            const agency = line.agencies?.[0] || {};
+            const agencyName = agency.name || '';
+
+            // Try to enrich with GTFS data if Google data is missing
+            if (!shortName || colorHex === '#0a7ea4') {
+              const lookupName = shortName || longName?.split(/[,-]/)[0]?.trim() || '';
+              const gtfsInfo = getGtfsRouteInfo(lookupName, gtfsRoutes);
+
+              if (gtfsInfo) {
+                if (!shortName && gtfsInfo.shortName) {
+                  shortName = gtfsInfo.shortName;
+                }
+                if (colorHex === '#0a7ea4' && gtfsInfo.color) {
+                  colorHex = gtfsInfo.color;
+                }
+              }
+            }
+
+            // Log what we extracted
+            console.log(`[Transit Route] Line data:`, {
+              shortName,
+              longName,
+              vehicleType,
+              color: colorHex,
+              departureTime: stepDepTime,
+              agencyName,
+              departureStop,
+              arrivalStop,
+            });
+
+            // Try to extract route number from longName if shortName is empty
+            if (!shortName && longName) {
+              const routeMatch = longName.match(/(?:Route\s+|Line\s+)?(\d+[A-Za-z]?)/i);
+              if (routeMatch) {
+                shortName = routeMatch[1];
+              } else {
+                shortName = longName.split(/[-,]/)[0].trim();
+              }
+            }
+
+            if (!shortName && agencyName) {
+              shortName = agencyName;
+            }
+
+            // Build clear instruction
+            let instruction = '';
+            if (shortName) {
+              instruction = `${info.name} ${shortName}`;
+            } else if (longName) {
+              instruction = `${info.name} (${longName.split(',')[0]})`;
+            } else {
+              instruction = info.name;
+            }
 
             steps.push({
               mode: 'TRANSIT',
-              instruction: `${info.name} ${shortName}`.trim(),
+              instruction,
               distance: '',
               duration: `${durationMin} min`,
               transitLine: {
                 name: longName,
-                shortName: shortName,
+                shortName: shortName || longName.split(',')[0] || info.name,
                 color: colorHex,
                 icon: info.icon,
               },
-              from: fromStop,
-              to: toStop,
-            });
-          } else if (step.travel_mode === 'BICYCLING') {
-            steps.push({
-              mode: 'WALKING',
-              instruction: step.html_instructions
-                .replace(/<[^>]*>/g, '')
-                .replace(/&[^;]*;/g, ' '),
-              distance: distStr(step.distance.value),
-              duration: `${durationMin} min`,
+              from: departureStop || undefined,
+              to: arrivalStop || undefined,
+              numStops: numStops,
+              polyline: step.polyline?.points,
+              departureTime: stepDepTime ? formatTimeHHMM(stepDepTime) : undefined,
+              arrivalTime: stepArrTime ? formatTimeHHMM(stepArrTime) : undefined,
             });
           }
         }
@@ -216,6 +331,7 @@ router.get('/', async (req: Request, res: Response) => {
       legs: buildLegs(route),
     }));
 
+    // Sort by duration
     allRoutes.sort((a, b) => {
       const durA = parseInt(a.legs[0]?.duration || '999');
       const durB = parseInt(b.legs[0]?.duration || '999');

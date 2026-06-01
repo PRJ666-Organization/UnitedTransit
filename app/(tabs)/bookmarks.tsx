@@ -68,22 +68,22 @@ export default function BookmarksScreen() {
   const theme =
     useColorScheme() === 'dark'
       ? {
-          bg: '#111318',
-          card: '#1a1d23',
+          bg: '#151718',
+          card: '#2a2d33',
           text: '#FFFFFF',
-          sub: '#FFFFFF',
+          sub: '#A0A4A8',
           accent: '#fff',
           inputBg: '#22252b',
-          border: '#3a3d3e',
+          border: '#3d4148',
         }
       : {
-          bg: '#eceef1',
-          card: '#f6f7f8',
+          bg: '#f0f2f5',
+          card: '#ffffff',
           text: '#000',
-          sub: '#3d3d3d',
+          sub: '#555555',
           accent: '#0a7ea4',
           inputBg: '#ffffff',
-          border: '#d5d8dc',
+          border: '#d0d0d0',
         };
 
   const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
