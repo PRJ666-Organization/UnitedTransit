@@ -5,6 +5,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [pendingVerifyUrl, setPendingVerifyUrl] = useState<string | null>(null);
   const [activeBookmarkLocations, setActiveBookmarkLocations] = useState<BookmarkLocation[]>([]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
@@ -45,10 +46,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const data = await res.json();
       console.log('[Auth] Register success', data);
-      setUser({ userId: data.userId, email, isAdmin: false, token: data.token });
+      setPendingVerifyUrl(data.verifyUrl ?? null);
+      //setUser({ userId: data.userId, email, isAdmin: false, token: data.token });
       return true;
     } catch (e) {
       console.error('[Auth] Register error', e);
+      return false;
+    }
+  };
+
+  const verifyEmail = async (): Promise<boolean> => {
+    if (!pendingVerifyUrl) return false;
+    try {
+      const res = await fetch(pendingVerifyUrl);
+      if (!res.ok) return false;
+      setPendingVerifyUrl(null);
+      return true;
+    } catch (e) {
+      console.error('[Auth] Verify error', e);
       return false;
     }
   };
@@ -112,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, setTestUser, fetchBookmarks, createBookmark, deleteBookmark, activeBookmarkLocations, setActiveBookmarkLocations }}>
+    <AuthContext.Provider value={{ user, pendingVerifyUrl, login, register, verifyEmail, logout, setTestUser, fetchBookmarks, createBookmark, deleteBookmark, activeBookmarkLocations, setActiveBookmarkLocations }}>
       {children}
     </AuthContext.Provider>
   );

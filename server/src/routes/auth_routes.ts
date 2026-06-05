@@ -28,12 +28,40 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     [email, password_hash, created_at],
   );
 
+  const verifyToken = await createVerificationToken(result.lastInsertRowId);
+  const verifyUrl = `${process.env.APP_URL}/auth/verify?token=${verifyToken}`;
+
+  try {
+    await sendVerificationEmail(email, verifyToken);
+  } catch (err) {
+    console.error('Email send failed:', err);
+  }
+
   const token = jwt.sign(
     { userId: result.lastInsertRowId, isAdmin: false },
     process.env.JWT_SECRET as string,
     { expiresIn: '24h' },
   );
-  res.status(201).json({ token, userId: result.lastInsertRowId });
+  res.status(201).json({ token, userId: result.lastInsertRowId, verifyToken, verifyUrl });
+});
+
+router.get('/verify', async (req: Request, res: Response): Promise<void> => {
+  const { token } = req.query;
+  if (!token || typeof token !== 'string') {
+    res.status(400).json({ error: 'Token is required' });
+    return;
+  }
+
+  const rows = await runQuery('SELECT user_id FROM verification_token WHERE token = ?', [token]);
+  if (!rows[0]) {
+    res.status(400).json({ error: 'Invalid or expired token' });
+    return;
+  }
+
+  const userId = rows[0].user_id;
+  await runMutation('UPDATE user SET is_verified = 1 WHERE user_id = ?', [userId]);
+  await runMutation('DELETE FROM verification_token WHERE token = ?', [token]);
+  res.json({ message: 'Email verified successfully' });
 });
 
 router.post('/login', async (req: Request, res: Response): Promise<void> => {

@@ -313,6 +313,14 @@ export const SCHEMA_SQL = `
     PRIMARY KEY (shape_id, shape_pt_sequence)
   );
 
+  CREATE TABLE IF NOT EXISTS verification_token (
+    token      TEXT    NOT NULL,
+    user_id    INTEGER NOT NULL,
+    created_at TEXT    NOT NULL,
+    CONSTRAINT pk_verification_token PRIMARY KEY (token),
+    CONSTRAINT fk_vt_user FOREIGN KEY (user_id) REFERENCES user (user_id) ON DELETE CASCADE
+  );
+
   CREATE UNIQUE INDEX IF NOT EXISTS idx_user_email ON user (email);
   CREATE INDEX IF NOT EXISTS idx_user_admin        ON user (is_admin);
   CREATE INDEX IF NOT EXISTS idx_trip_user         ON trip (user_id);

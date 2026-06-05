@@ -14,7 +14,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function LoginScreen() {
-  const { user, login, register, logout, setTestUser } = useAuth();
+  const { user, pendingVerifyUrl, login, register, verifyEmail, logout, setTestUser } = useAuth();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -72,7 +72,9 @@ export default function LoginScreen() {
       }
       return;
     }
-    router.navigate('/(tabs)/bookmarks');
+    if (!isRegister) {
+      router.navigate('/(tabs)/bookmarks');
+    }
   };
 
   const handleLogout = () => {
@@ -86,6 +88,33 @@ export default function LoginScreen() {
     setTestUser();
     router.navigate('/(tabs)/bookmarks');
   };
+
+  if (pendingVerifyUrl) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.bg }]}>
+        <View style={styles.content}>
+          <Text style={[styles.title, { color: theme.text }]}>Verify your email</Text>
+          <Text style={[styles.subtitle, { color: theme.sub }]}>
+            A verification link was sent to your email. Click below to verify your account.
+          </Text>
+          <TouchableOpacity
+            style={[styles.loginBtn, { backgroundColor: theme.accent, opacity: loading ? 0.6 : 1 }]}
+            disabled={loading}
+            onPress={async () => {
+              setLoading(true);
+              const ok = await verifyEmail();
+              setLoading(false);
+              if (ok) setIsRegister(false);
+            }}
+          >
+            <Text style={{ color: theme.bg, fontWeight: '600', fontSize: 16 }}>
+              {loading ? 'Verifying...' : 'Click to Verify Email'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   if (user) {
     return (

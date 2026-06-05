@@ -1,41 +1,41 @@
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import { NextFunction, Response } from 'express';
 import { AuthRequest } from './user_auth';
-import { runQuery } from '../db/database';
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+import { runQuery, runMutation } from '../db/database';
 
 export function isValidEmail(email: string): boolean {
   const emailRGX = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
   return emailRGX.test(email);
 }
 
-export function createVerificationToken(userId: number): string {
-  return jwt.sign(
-    { userId: 'verify' },
-    process.env.JWT_SECRET as string,
-    { expiresIn: '24h' },
-  );
-}
-
 export async function sendVerificationEmail(email: string, token: string): Promise<void> {
   const verifyUrl = `${process.env.APP_URL}/auth/verify?token=${token}`;
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_PASS,
+    },
+  });
   await transporter.sendMail({
-    from: process.env.SMTP_USER,
+    from: `"UnitedTransit" <${process.env.GMAIL_USER}>`,
     to: email,
     subject: 'Verify your UnitedTransit account',
     html: `<p>Click the link below to verify your email. It will expire in 24 hours.</p>
-          <p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
+           <p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
   });
+}
+
+export async function createVerificationToken(userId: number): Promise<string> {
+  const token = crypto.randomBytes(32).toString('hex');
+  const created_at = new Date().toISOString();
+  await runMutation(
+    'INSERT INTO verification_token (token, user_id, created_at) VALUES (?, ?, ?)',
+    [token, userId, created_at],
+  );
+  return token;
 }
 
 export async function requireVerified(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {

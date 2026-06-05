@@ -15,8 +15,10 @@ export type BookmarkLocation = {
 
 export type AuthContextType = {
   user: AuthUser | null;
+  pendingVerifyUrl: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string) => Promise<boolean>;
+  verifyEmail: () => Promise<boolean>;
   logout: () => void;
   setTestUser: () => void;
   fetchBookmarks: () => Promise<any[]>;
