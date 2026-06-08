@@ -3,7 +3,6 @@ import fs from 'fs';
 import path from 'path';
 import { SCHEMA_SQL } from './schema';
 
-
 const DB_PATH = path.join(__dirname, '..', '..', 'data', 'transit.db');
 
 function ensureDataDir() {
@@ -35,10 +34,43 @@ export async function getDatabase(): Promise<Database.Database> {
   // Migration: add locations_json column if it doesn't exist
   try {
     db.exec('ALTER TABLE bookmark ADD COLUMN locations_json TEXT;');
-    //db.exec('ALTER TABLE user ADD COLUMN is_verified INTEGER NOT NULL DEFAULT 0;'); // user email
-    //this won't work
   } catch {
     // Column already exists, ignore
+  }
+
+  // Migration: add is_verified column if it doesn't exist
+  try {
+    db.exec('ALTER TABLE user ADD COLUMN is_verified INTEGER NOT NULL DEFAULT 0;');
+  } catch {
+    // Column already exists, ignore
+  }
+
+  // Migration: add is_verified check constraint (best-effort)
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_user_verified ON user (is_verified);');
+  } catch {
+    // Index already exists, ignore
+  }
+
+  // Migration: create search_history table
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS search_history (
+        search_id       INTEGER NOT NULL,
+        user_id         INTEGER,
+        locations_json  TEXT    NOT NULL,
+        searched_at     TEXT    NOT NULL,
+        device_id       TEXT,
+        CONSTRAINT pk_search_history PRIMARY KEY (search_id AUTOINCREMENT),
+        CONSTRAINT fk_search_user
+            FOREIGN KEY (user_id) REFERENCES user (user_id)
+            ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_search_history_user ON search_history (user_id);
+      CREATE INDEX IF NOT EXISTS idx_search_history_device ON search_history (device_id);
+    `);
+  } catch {
+    // Table already exists, ignore
   }
 
   console.log('Database initialized (server) at', DB_PATH);

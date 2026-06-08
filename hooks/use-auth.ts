@@ -13,6 +13,12 @@ export type BookmarkLocation = {
   name?: string;
 };
 
+export type SearchHistoryItem = {
+  search_id: number;
+  locations_json: string;
+  searched_at: string;
+};
+
 export type AuthContextType = {
   user: AuthUser | null;
   pendingVerifyUrl: string | null;
@@ -26,6 +32,9 @@ export type AuthContextType = {
   deleteBookmark: (id: string) => Promise<boolean>;
   activeBookmarkLocations: BookmarkLocation[];
   setActiveBookmarkLocations: (locs: BookmarkLocation[]) => void;
+  fetchSearchHistory: () => Promise<SearchHistoryItem[]>;
+  saveSearchHistory: (locations: BookmarkLocation[]) => Promise<boolean>;
+  getDeviceId: () => Promise<string>;
 };
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);

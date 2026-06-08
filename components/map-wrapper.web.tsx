@@ -1,5 +1,5 @@
 import { mapStyle } from '@/styles/map-style';
-import { BookmarkLocation } from '@/hooks/use-auth';
+import { BookmarkLocation, SearchHistoryItem } from '@/hooks/use-auth';
 import {
   Autocomplete,
   GoogleMap,
@@ -7,7 +7,7 @@ import {
   Polyline,
   useJsApiLoader,
 } from '@react-google-maps/api';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 
 type RoutePolyline = {
   steps: {
@@ -59,6 +59,22 @@ function decodePolyline(encoded: string): { lat: number; lng: number }[] {
   return coords;
 }
 
+// Format relative time for recent searches
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
 export default function MapWrapper({
   bookmarkLocations,
   initialRegion,
@@ -67,6 +83,10 @@ export default function MapWrapper({
   routePolylines,
   showSignIn,
   onSignIn,
+  recentSearches,
+  onSelectRecentSearch,
+  isAddingWaypoint,
+  onWaypointAdded,
 }: {
   bookmarkLocations: BookmarkLocation[];
   initialRegion: {
@@ -80,6 +100,10 @@ export default function MapWrapper({
   routePolylines?: RoutePolyline[];
   showSignIn?: boolean;
   onSignIn?: () => void;
+  recentSearches?: SearchHistoryItem[];
+  onSelectRecentSearch?: (locations: BookmarkLocation[]) => void;
+  isAddingWaypoint?: boolean;
+  onWaypointAdded?: (waypoint: BookmarkLocation) => void;
 }) {
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
@@ -88,8 +112,10 @@ export default function MapWrapper({
 
   const mapRef = useRef<any>(null);
   const autoCompleteRef = useRef<any>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const [home, setHome] = useState<{ lat: number; lng: number } | null>(null);
+  const [showRecentSearches, setShowRecentSearches] = useState(false);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -119,11 +145,19 @@ export default function MapWrapper({
     const place = autoCompleteRef.current.getPlace();
     if (!place.geometry || !place.geometry.location) return;
 
-    const destination: BookmarkLocation = {
+    const location: BookmarkLocation = {
       latitude: place.geometry.location.lat(),
       longitude: place.geometry.location.lng(),
-      name: place.formatted_address || place.name || 'Selected Destination',
+      name: place.formatted_address || place.name || 'Selected Location',
     };
+
+    // If in waypoint mode, add as waypoint
+    if (isAddingWaypoint && onWaypointAdded) {
+      onWaypointAdded(location);
+      setShowRecentSearches(false);
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
 
     // If we have the user's location and a callback, create a route
     if (home && onDestinationSelected) {
@@ -132,13 +166,25 @@ export default function MapWrapper({
         longitude: home.lng,
         name: 'Current Location',
       };
-      onDestinationSelected(origin, destination);
+      onDestinationSelected(origin, location);
     } else if (mapRef.current) {
       // Fallback: just pan to the location
-      mapRef.current.panTo({ lat: destination.latitude, lng: destination.longitude });
+      mapRef.current.panTo({ lat: location.latitude, lng: location.longitude });
       mapRef.current.setZoom(14);
     }
+    setShowRecentSearches(false);
   };
+
+  // Handle selecting a recent search
+  const handleSelectRecentSearch = useCallback((item: SearchHistoryItem) => {
+    try {
+      const locations: BookmarkLocation[] = JSON.parse(item.locations_json);
+      onSelectRecentSearch?.(locations);
+      setShowRecentSearches(false);
+    } catch (e) {
+      console.error('[MapWrapper Web] Failed to parse recent search:', e);
+    }
+  }, [onSelectRecentSearch]);
 
   const center = useMemo(() => {
     if (bookmarkLocations.length === 0) {
@@ -223,24 +269,114 @@ export default function MapWrapper({
           </button>
         )}
 
-        <Autocomplete
-          onLoad={(ref) => (autoCompleteRef.current = ref)}
-          onPlaceChanged={onPlaceChanged}
-          options={{
-            componentRestrictions: { country: 'ca' },
-          }}
-        >
-          <input
-            type="text"
-            placeholder="Search destination..."
-            style={{
-              width: '300px',
-              padding: '10px',
-              borderRadius: '8px',
-              border: '1px solid #ccc',
+        <div style={{ position: 'relative' }}>
+          <Autocomplete
+            onLoad={(ref) => (autoCompleteRef.current = ref)}
+            onPlaceChanged={onPlaceChanged}
+            options={{
+              componentRestrictions: { country: 'ca' },
             }}
-          />
-        </Autocomplete>
+          >
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder={isAddingWaypoint ? "Search waypoint..." : "Search destination..."}
+              style={{
+                width: '300px',
+                padding: '10px',
+                borderRadius: '8px',
+                border: isAddingWaypoint ? '2px solid #0a7ea4' : '1px solid #ccc',
+              }}
+              onFocus={() => {
+                if (recentSearches && recentSearches.length > 0 && !inputRef.current?.value) {
+                  setShowRecentSearches(true);
+                }
+              }}
+              onBlur={() => {
+                // Delay to allow click on recent search items
+                setTimeout(() => setShowRecentSearches(false), 200);
+              }}
+              onChange={() => {
+                if (inputRef.current?.value) {
+                  setShowRecentSearches(false);
+                }
+              }}
+            />
+          </Autocomplete>
+
+          {/* Recent Searches Dropdown */}
+          {showRecentSearches && recentSearches && recentSearches.length > 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                background: '#fff',
+                borderRadius: '8px',
+                border: '1px solid #ccc',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                marginTop: '4px',
+                maxHeight: '280px',
+                overflowY: 'auto',
+                zIndex: 20,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: '#666',
+                  padding: '10px',
+                  paddingBottom: '6px',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Recent Searches
+              </div>
+              {recentSearches.map((search) => {
+                try {
+                  const locations: BookmarkLocation[] = JSON.parse(search.locations_json);
+                  const origin = locations[0]?.name || 'Unknown';
+                  const dest = locations[locations.length - 1]?.name || 'Unknown';
+                  const waypointCount = locations.length - 2;
+
+                  return (
+                    <div
+                      key={search.search_id}
+                      onClick={() => handleSelectRecentSearch(search)}
+                      style={{
+                        padding: '10px',
+                        borderBottom: '1px solid #eee',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLDivElement).style.background = '#f5f5f5';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLDivElement).style.background = 'transparent';
+                      }}
+                    >
+                      <div style={{ fontWeight: 500, color: '#333', fontSize: '13px' }}>
+                        {origin} → {dest}
+                      </div>
+                      {waypointCount > 0 && (
+                        <div style={{ fontSize: '11px', color: '#666', marginTop: '1px' }}>
+                          +{waypointCount} stop{waypointCount > 1 ? 's' : ''}
+                        </div>
+                      )}
+                      <div style={{ fontSize: '10px', color: '#999', marginTop: '2px' }}>
+                        {formatRelativeTime(search.searched_at)}
+                      </div>
+                    </div>
+                  );
+                } catch {
+                  return null;
+                }
+              })}
+            </div>
+          )}
+        </div>
 
         {home && (
           <button
@@ -276,6 +412,29 @@ export default function MapWrapper({
         )}
       </div>
 
+      {/* Waypoint Mode Banner */}
+      {isAddingWaypoint && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '60px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 9,
+            background: '#fff',
+            borderRadius: '8px',
+            border: '2px solid #0a7ea4',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          }}
+        >
+          <span style={{ fontWeight: 500 }}>📍 Search a location to add as waypoint</span>
+        </div>
+      )}
+
       <GoogleMap
         onLoad={onLoad}
         mapContainerStyle={{ width: '100%', height: '100%' }}
@@ -285,13 +444,35 @@ export default function MapWrapper({
           styles: mapStyle,
         }}
       >
-        {bookmarkLocations.map((loc, i) => (
-          <Marker
-            key={i}
-            position={{ lat: loc.latitude, lng: loc.longitude }}
-            title={loc.name ?? `Stop ${i + 1}`}
-          />
-        ))}
+        {/* Markers with numbered labels and color coding */}
+        {bookmarkLocations.map((loc, i) => {
+          const label = String(i + 1); // 1, 2, 3, etc.
+          const isOrigin = i === 0;
+          const isDestination = i === bookmarkLocations.length - 1;
+          const markerColor = isOrigin ? '#22c55e' : isDestination ? '#ef4444' : '#0a7ea4';
+
+          return (
+            <Marker
+              key={i}
+              position={{ lat: loc.latitude, lng: loc.longitude }}
+              title={loc.name ?? `Stop ${i + 1}`}
+              label={{
+                text: label,
+                color: '#fff',
+                fontSize: '14px',
+                fontWeight: 'bold',
+              }}
+              icon={{
+                path: 'M 0,-10 A 10,10 0 1,1 0,10 A 10,10 0 1,1 0,-10',
+                fillColor: markerColor,
+                fillOpacity: 1,
+                strokeColor: '#fff',
+                strokeWeight: 2,
+                scale: 1,
+              }}
+            />
+          );
+        })}
 
         {/* Draw route polylines if available */}
         {routePolylineCoords.length > 0 ? (

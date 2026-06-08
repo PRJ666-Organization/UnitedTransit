@@ -1,8 +1,8 @@
 import * as Location from 'expo-location';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
-import { BookmarkLocation } from '@/hooks/use-auth';
+import { BookmarkLocation, SearchHistoryItem } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type GeoResult = {
@@ -90,6 +90,10 @@ export default function MapWrapper({
   routePolylines,
   showSignIn,
   onSignIn,
+  recentSearches,
+  onSelectRecentSearch,
+  isAddingWaypoint,
+  onWaypointAdded,
 }: {
   bookmarkLocations: BookmarkLocation[];
   initialRegion: Region;
@@ -98,6 +102,10 @@ export default function MapWrapper({
   routePolylines?: RoutePolyline[];
   showSignIn?: boolean;
   onSignIn?: () => void;
+  recentSearches?: SearchHistoryItem[];
+  onSelectRecentSearch?: (locations: BookmarkLocation[]) => void;
+  isAddingWaypoint?: boolean;
+  onWaypointAdded?: (waypoint: BookmarkLocation) => void;
 }) {
   const mapRef = useRef<MapView>(null);
   const colorScheme = useColorScheme();
@@ -109,6 +117,7 @@ export default function MapWrapper({
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
+  const [showRecentSearches, setShowRecentSearches] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -194,6 +203,20 @@ export default function MapWrapper({
 
   // Handle selecting a search result
   const handleSelectResult = useCallback((result: GeoResult) => {
+    // If in waypoint mode, add as waypoint
+    if (isAddingWaypoint && onWaypointAdded) {
+      const waypoint: BookmarkLocation = {
+        latitude: result.lat,
+        longitude: result.lng,
+        name: result.formatted_address,
+      };
+      onWaypointAdded(waypoint);
+      setSearchQuery('');
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+
     if (!currentLocation) {
       setSearchError('Unable to get your current location. Please enable location services.');
       return;
@@ -215,7 +238,45 @@ export default function MapWrapper({
     setSearchQuery('');
     setSearchResults([]);
     setShowResults(false);
-  }, [currentLocation, onDestinationSelected]);
+  }, [currentLocation, onDestinationSelected, isAddingWaypoint, onWaypointAdded]);
+
+  // Handle search bar focus
+  const handleSearchFocus = useCallback(() => {
+    if (searchQuery.trim()) {
+      setShowResults(true);
+      setShowRecentSearches(false);
+    } else if (recentSearches && recentSearches.length > 0) {
+      setShowRecentSearches(true);
+      setShowResults(false);
+    }
+  }, [searchQuery, recentSearches]);
+
+  // Format relative time for recent searches
+  const formatRelativeTime = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Handle selecting a recent search
+  const handleSelectRecentSearch = useCallback((item: SearchHistoryItem) => {
+    try {
+      const locations: BookmarkLocation[] = JSON.parse(item.locations_json);
+      onSelectRecentSearch?.(locations);
+      setShowRecentSearches(false);
+    } catch (e) {
+      console.error('[MapWrapper] Failed to parse recent search:', e);
+    }
+  }, [onSelectRecentSearch]);
 
   // Build polylines for each step
   const polylines = routePolylines?.flatMap((route, routeIdx) =>
@@ -256,11 +317,17 @@ export default function MapWrapper({
         <View style={[styles.searchContainer, { backgroundColor: theme.card, flex: 1 }]}>
           <TextInput
             style={[styles.searchInput, { color: theme.text }]}
-            placeholder="Search destination..."
+            placeholder={isAddingWaypoint ? "Search waypoint..." : "Search destination..."}
             placeholderTextColor={theme.sub}
             value={searchQuery}
             onChangeText={handleSearch}
-            onFocus={() => searchQuery && setShowResults(true)}
+            onFocus={handleSearchFocus}
+            onBlur={() => {
+              // Delay to allow tap on recent search items
+              setTimeout(() => {
+                setShowRecentSearches(false);
+              }, 200);
+            }}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity
@@ -306,6 +373,61 @@ export default function MapWrapper({
         </View>
       )}
 
+      {/* Recent Searches Dropdown */}
+      {showRecentSearches && recentSearches && recentSearches.length > 0 && (
+        <View style={[styles.recentSearchesDropdown, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.recentSearchesTitle, { color: theme.sub }]}>Recent Searches</Text>
+          <ScrollView style={styles.recentSearchesList}>
+            {recentSearches.map((search) => {
+              try {
+                const locations: BookmarkLocation[] = JSON.parse(search.locations_json);
+                const origin = locations[0]?.name || 'Unknown';
+                const dest = locations[locations.length - 1]?.name || 'Unknown';
+                const waypointCount = locations.length - 2;
+
+                return (
+                  <TouchableOpacity
+                    key={search.search_id}
+                    style={[styles.recentSearchItem, { borderBottomColor: theme.border }]}
+                    onPress={() => handleSelectRecentSearch(search)}
+                  >
+                    <Text style={[styles.recentSearchRoute, { color: theme.text }]} numberOfLines={1}>
+                      {origin} → {dest}
+                    </Text>
+                    {waypointCount > 0 && (
+                      <Text style={[styles.recentSearchWaypoints, { color: theme.sub }]}>
+                        +{waypointCount} stop{waypointCount > 1 ? 's' : ''}
+                      </Text>
+                    )}
+                    <Text style={[styles.recentSearchTime, { color: theme.sub }]}>
+                      {formatRelativeTime(search.searched_at)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              } catch {
+                return null;
+              }
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Waypoint Mode Banner */}
+      {isAddingWaypoint && (
+        <View style={[styles.waypointBanner, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.waypointBannerText, { color: theme.text }]}>
+            📍 Tap a location to add as waypoint
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              // This would need to be passed from parent to cancel waypoint mode
+            }}
+          >
+            <Text style={[styles.waypointBannerCancel, { color: theme.sub }]}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <MapView
         ref={mapRef}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
@@ -314,18 +436,31 @@ export default function MapWrapper({
         showsUserLocation={true}
         showsMyLocationButton={false}
       >
-        {bookmarkLocations.map((loc, i) => (
-          <Marker
-            key={`${loc.latitude}-${loc.longitude}-${i}`}
-            coordinate={loc}
-            title={loc.name ?? `Stop ${i + 1}`}
-          />
-        ))}
+        {/* Markers with numbered labels and color coding */}
+        {bookmarkLocations.map((loc, i) => {
+          const label = String(i + 1); // 1, 2, 3, etc.
+          const isOrigin = i === 0;
+          const isDestination = i === bookmarkLocations.length - 1;
+          const markerColor = isOrigin ? '#22c55e' : isDestination ? '#ef4444' : '#0a7ea4';
+
+          return (
+            <Marker
+              key={`${loc.latitude}-${loc.longitude}-${i}`}
+              coordinate={loc}
+              title={loc.name ?? `Stop ${i + 1}`}
+              description={isOrigin ? 'Start' : isDestination ? 'End' : `Stop ${i + 1}`}
+            >
+              <View style={[styles.markerContainer, { backgroundColor: markerColor }]}>
+                <Text style={styles.markerLabel}>{label}</Text>
+              </View>
+            </Marker>
+          );
+        })}
 
         {/* Draw route polylines */}
         {polylines}
 
-        {/* Fallback: direct line if no polylines */}
+        {/* Fallback: direct line connecting all stops in order */}
         {bookmarkLocations.length >= 2 && !routePolylines && (
           <Polyline
             coordinates={bookmarkLocations}
@@ -426,5 +561,84 @@ const styles = StyleSheet.create({
   resultSub: {
     fontSize: 12,
     marginTop: 2,
+  },
+  recentSearchesDropdown: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 100 : 80,
+    left: 12,
+    right: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 10,
+    maxHeight: 280,
+  },
+  recentSearchesTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    padding: 10,
+    paddingBottom: 6,
+  },
+  recentSearchesList: {
+    maxHeight: 200,
+  },
+  recentSearchItem: {
+    padding: 10,
+    borderBottomWidth: 1,
+  },
+  recentSearchRoute: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  recentSearchWaypoints: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  recentSearchTime: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+  waypointBanner: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 105 : 85,
+    left: 12,
+    right: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 9,
+  },
+  waypointBannerText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  waypointBannerCancel: {
+    fontSize: 14,
+  },
+  // Custom marker styles
+  markerContainer: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  markerLabel: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
