@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { BookmarkLocation } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -49,7 +49,6 @@ type TransitFilter = 'all' | 'subway' | 'bus';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
-// Parse "2:30 pm" / "12:05 am" into total minutes since midnight
 function parseTimeToMinutes(timeStr: string): number | null {
   const match = timeStr.match(/(\d+):(\d+)\s*(am|pm)/i);
   if (!match) return null;
@@ -78,38 +77,110 @@ function formatStopDuration(minutes: number): string {
   return `${m}m`;
 }
 
-// Map transit types to categories - including all possible vehicle types from Google
-const SUBWAY_VEHICLE_TYPES = ['SUBWAY_TRAIN', 'METRO_RAIL', 'HEAVY_RAIL', 'COMMUTER_TRAIN', 'HIGH_SPEED_TRAIN', 'RAIL'];
-const BUS_VEHICLE_TYPES = ['BUS', 'TROLLEYBUS', 'TROLLEY_BUS'];
-
-// Check if a route contains a specific transit type based on vehicle type
-function routeHasVehicleType(leg: TransitLeg, vehicleTypes: string[]): boolean {
-  const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
-  // The icon in the data should match, but we also check vehicle type if available
-  return transitSteps.some(s => {
-    const icon = s.transitLine?.icon || '🚌';
-    // Check by icon
-    if (icon === '🚇' || icon === '🚆') return vehicleTypes === SUBWAY_VEHICLE_TYPES || vehicleTypes.some(t => SUBWAY_VEHICLE_TYPES.includes(t));
-    if (icon === '🚌' || icon === '⛴️') return vehicleTypes === BUS_VEHICLE_TYPES || vehicleTypes.some(t => BUS_VEHICLE_TYPES.includes(t));
-    return false;
-  });
-}
-
 function routeContainsSubway(leg: TransitLeg): boolean {
-  const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
-  // Check by icon (🚇 = subway, 🚆 = train/rail, 🚋 = tram)
-  return transitSteps.some(s => {
+  return leg.steps.filter(s => s.mode === 'TRANSIT').some(s => {
     const icon = s.transitLine?.icon || '';
     return icon === '🚇' || icon === '🚆';
   });
 }
 
 function routeContainsBus(leg: TransitLeg): boolean {
-  const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
-  return transitSteps.some(s => {
+  return leg.steps.filter(s => s.mode === 'TRANSIT').some(s => {
     const icon = s.transitLine?.icon || '';
     return icon === '🚌' || icon === '⛴️';
   });
+}
+
+// Wheel picker constants
+const WHEEL_ITEM_H = 44;
+const WHEEL_VISIBLE = 3;
+const WHEEL_H = WHEEL_ITEM_H * WHEEL_VISIBLE;
+const WHEEL_PAD = WHEEL_ITEM_H; // (WHEEL_H - WHEEL_ITEM_H) / 2
+
+const HOUR_ITEMS = Array.from({ length: 13 }, (_, i) => i); // 0–12 h
+const MINUTE_ITEMS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+
+type WheelColors = { text: string; sub: string; accent: string; border: string };
+
+type WheelColumnProps = {
+  items: number[];
+  selectedIndex: number;
+  onSelect: (index: number) => void;
+  format: (val: number) => string;
+  colors: WheelColors;
+};
+
+function WheelColumn({ items, selectedIndex, onSelect, format, colors }: WheelColumnProps) {
+  const ref = useRef<ScrollView>(null);
+  // liveIdx tracks the visually centered item in real-time as the wheel spins
+  const [liveIdx, setLiveIdx] = useState(selectedIndex);
+
+  // Scroll to starting position once on mount
+  useEffect(() => {
+    const t = setTimeout(() => {
+      ref.current?.scrollTo({ y: selectedIndex * WHEEL_ITEM_H, animated: false });
+    }, 60);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Update highlight as the wheel moves
+  const onScrollMove = useCallback((e: any) => {
+    const rawY = e.nativeEvent.contentOffset.y;
+    const idx = Math.max(0, Math.min(items.length - 1, Math.round(rawY / WHEEL_ITEM_H)));
+    setLiveIdx(idx);
+  }, [items.length]);
+
+  // Snap + commit when scrolling stops
+  const onScrollSettle = useCallback((rawY: number) => {
+    const idx = Math.max(0, Math.min(items.length - 1, Math.round(rawY / WHEEL_ITEM_H)));
+    ref.current?.scrollTo({ y: idx * WHEEL_ITEM_H, animated: false });
+    setLiveIdx(idx);
+    onSelect(idx);
+  }, [items.length, onSelect]);
+
+  return (
+    <View style={{ height: WHEEL_H, overflow: 'hidden', flex: 1 }}>
+      {/* Center selection band */}
+      <View
+        style={{
+          position: 'absolute', top: WHEEL_PAD, height: WHEEL_ITEM_H,
+          left: 8, right: 8, borderTopWidth: 1.5, borderBottomWidth: 1.5,
+          borderColor: colors.accent,
+        }}
+        pointerEvents="none"
+      />
+      <ScrollView
+        ref={ref}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={WHEEL_ITEM_H}
+        decelerationRate="fast"
+        nestedScrollEnabled={true}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingVertical: WHEEL_PAD }}
+        onScroll={onScrollMove}
+        onMomentumScrollEnd={e => onScrollSettle(e.nativeEvent.contentOffset.y)}
+        onScrollEndDrag={e => onScrollSettle(e.nativeEvent.contentOffset.y)}
+      >
+        {items.map((val, i) => {
+          const isCenter = i === liveIdx;
+          return (
+            <View key={i} style={{ height: WHEEL_ITEM_H, alignItems: 'center', justifyContent: 'center' }}>
+              <ThemedText
+                style={{
+                  fontSize: isCenter ? 20 : 14,
+                  fontWeight: isCenter ? '700' : '400',
+                  color: isCenter ? colors.accent : colors.sub,
+                  opacity: isCenter ? 1 : 0.45,
+                }}
+              >
+                {format(val)}
+              </ThemedText>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
 }
 
 export default function RouteInformation({ locations, name, onClear, onRoutesLoaded, onRouteSelected, selectedRouteIndex }: RouteInformationProps) {
@@ -123,12 +194,12 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
   const [error, setError] = useState<string | null>(null);
   const [transitFilter, setTransitFilter] = useState<TransitFilter>('all');
 
-  // Per-stop durations: index 0 = first stop after origin, last index = final destination
   const [stopDurations, setStopDurations] = useState<number[]>([]);
-  const [activeCustomIdx, setActiveCustomIdx] = useState<number | null>(null);
-  const [customStopInput, setCustomStopInput] = useState('');
+  // Modal picker state
+  const [pickerStopIdx, setPickerStopIdx] = useState<number | null>(null);
+  const [draftHourIdx, setDraftHourIdx] = useState(0);
+  const [draftMinuteIdx, setDraftMinuteIdx] = useState(0);
 
-  // Sync array length when locations change
   React.useEffect(() => {
     const stopCount = Math.max(0, locations.length - 1);
     setStopDurations(prev => {
@@ -137,9 +208,18 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
       prev.forEach((v, i) => { if (i < stopCount) next[i] = v; });
       return next;
     });
-    setActiveCustomIdx(null);
-    setCustomStopInput('');
+    setPickerStopIdx(null);
   }, [locations.length]);
+
+  const openPicker = useCallback((i: number) => {
+    const totalMins = stopDurations[i] ?? 0;
+    const hIdx = Math.min(Math.floor(totalMins / 60), 12);
+    const mRem = totalMins % 60;
+    const mIdx = Math.max(0, MINUTE_ITEMS.indexOf(Math.min(Math.round(mRem / 5) * 5, 55)));
+    setDraftHourIdx(hIdx);
+    setDraftMinuteIdx(mIdx);
+    setPickerStopIdx(i);
+  }, [stopDurations]);
 
   const updateStopDuration = useCallback((idx: number, mins: number) => {
     setStopDurations(prev => {
@@ -149,6 +229,13 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
     });
   }, []);
 
+  const applyPicker = useCallback(() => {
+    if (pickerStopIdx !== null) {
+      updateStopDuration(pickerStopIdx, draftHourIdx * 60 + MINUTE_ITEMS[draftMinuteIdx]);
+    }
+    setPickerStopIdx(null);
+  }, [pickerStopIdx, draftHourIdx, draftMinuteIdx, updateStopDuration]);
+
   const totalStopMins = stopDurations.reduce((a, b) => a + b, 0);
 
   const fetchDirections = useCallback(async () => {
@@ -156,20 +243,38 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
     setLoading(true);
     setError(null);
     try {
-      const origin = `${locations[0].latitude},${locations[0].longitude}`;
-      const destination = `${locations[locations.length - 1].latitude},${locations[locations.length - 1].longitude}`;
-
-      const url = `${API_URL}/transit-route?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`;
-
-      const res = await fetch(url);
-      const json = await res.json();
-
-      if (json.error) {
-        setError(json.error);
-        setRoutes([]);
+      if (locations.length === 2) {
+        const origin = `${locations[0].latitude},${locations[0].longitude}`;
+        const destination = `${locations[1].latitude},${locations[1].longitude}`;
+        const url = `${API_URL}/transit-route?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`;
+        const res = await fetch(url);
+        const json = await res.json();
+        if (json.error) {
+          setError(json.error);
+          setRoutes([]);
+        } else {
+          setRoutes(json.routes || [{ summary: '', legs: json.legs || [] }]);
+        }
       } else {
-        const allRoutes = json.routes || [{ summary: '', legs: json.legs || [] }];
-        setRoutes(allRoutes);
+        // Multi-stop: fetch each consecutive leg pair separately, then combine
+        const legFetches: Promise<any>[] = [];
+        for (let i = 0; i < locations.length - 1; i++) {
+          const o = `${locations[i].latitude},${locations[i].longitude}`;
+          const d = `${locations[i + 1].latitude},${locations[i + 1].longitude}`;
+          const url = `${API_URL}/transit-route?origin=${encodeURIComponent(o)}&destination=${encodeURIComponent(d)}`;
+          legFetches.push(fetch(url).then(r => r.json()).catch(() => null));
+        }
+        const legResults = await Promise.all(legFetches);
+        const combinedLegs: TransitLeg[] = legResults.flatMap(json => {
+          if (!json || json.error || !json.routes?.length) return [];
+          return json.routes[0].legs as TransitLeg[];
+        });
+        if (combinedLegs.length === 0) {
+          setError('No transit routes found for this trip');
+          setRoutes([]);
+        } else {
+          setRoutes([{ summary: 'Multi-stop route', legs: combinedLegs }]);
+        }
       }
     } catch (e) {
       setError('Failed to fetch directions');
@@ -189,59 +294,110 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
     }
   }, [locations, fetchDirections]);
 
-  // Notify parent when routes are loaded
+  // Notify parent with polylines from ALL legs (fixes 3+ stop map lines)
   useEffect(() => {
     if (routes.length > 0 && onRoutesLoaded) {
       const polylines = routes.map(route => ({
-        steps: route.legs[0]?.steps.map(step => ({
+        steps: route.legs.flatMap(leg => leg.steps.map(step => ({
           mode: step.mode,
           polyline: step.polyline,
           color: step.transitLine?.color,
-        })) || [],
+        }))),
       }));
       onRoutesLoaded(polylines);
     }
   }, [routes, onRoutesLoaded]);
 
-  // Filter routes based on selected transit type
   const filteredRoutes = useMemo(() => {
     if (transitFilter === 'all') return routes;
-
     return routes.filter(route => {
-      const leg = route.legs[0];
-      if (!leg) return false;
-
-      if (transitFilter === 'subway') {
-        return routeContainsSubway(leg);
-      } else if (transitFilter === 'bus') {
-        return routeContainsBus(leg);
-      }
+      const combinedLeg: TransitLeg = { steps: route.legs.flatMap(l => l.steps), duration: '', distance: '' };
+      if (transitFilter === 'subway') return routeContainsSubway(combinedLeg);
+      if (transitFilter === 'bus') return routeContainsBus(combinedLeg);
       return true;
     });
   }, [routes, transitFilter]);
 
-  // Count routes by type
   const routeCounts = useMemo(() => {
-    let subway = 0;
-    let bus = 0;
-
+    let subway = 0, bus = 0;
     routes.forEach(route => {
-      const leg = route.legs[0];
-      if (!leg) return;
-
-      if (routeContainsSubway(leg)) subway++;
-      if (routeContainsBus(leg)) bus++;
+      const combinedLeg: TransitLeg = { steps: route.legs.flatMap(l => l.steps), duration: '', distance: '' };
+      if (routeContainsSubway(combinedLeg)) subway++;
+      if (routeContainsBus(combinedLeg)) bus++;
     });
-
     return { subway, bus };
   }, [routes]);
 
-  if (locations.length === 0) {
-    return null;
-  }
+  if (locations.length === 0) return null;
+
+  const pickerStopName = pickerStopIdx !== null
+    ? (locations[pickerStopIdx + 1]?.name?.split(',')[0] ?? `Stop ${pickerStopIdx + 1}`)
+    : '';
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false}>
+    <>
+    {/* Duration picker modal — rendered outside the panel ScrollView so wheels work freely */}
+    <Modal
+      visible={pickerStopIdx !== null}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setPickerStopIdx(null)}
+    >
+      <TouchableOpacity
+        style={modalStyles.backdrop}
+        activeOpacity={1}
+        onPress={() => setPickerStopIdx(null)}
+      />
+      <View style={[modalStyles.sheet, { backgroundColor: isDark ? '#1e2126' : '#ffffff' }]}>
+        {/* Header */}
+        <View style={[modalStyles.sheetHeader, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => setPickerStopIdx(null)} style={modalStyles.sheetBtn}>
+            <Text style={[modalStyles.sheetCancel, { color: colors.sub }]}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={[modalStyles.sheetTitle, { color: colors.text }]} numberOfLines={1}>
+            {pickerStopName}
+          </Text>
+          <TouchableOpacity onPress={applyPicker} style={modalStyles.sheetBtn}>
+            <Text style={[modalStyles.sheetDone, { color: colors.accent }]}>Done</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Wheels */}
+        <View style={modalStyles.wheelsRow}>
+          <WheelColumn
+            items={HOUR_ITEMS}
+            selectedIndex={draftHourIdx}
+            onSelect={setDraftHourIdx}
+            format={v => `${v} hr`}
+            colors={colors}
+          />
+          <Text style={[modalStyles.wheelColon, { color: colors.sub }]}>:</Text>
+          <WheelColumn
+            items={MINUTE_ITEMS}
+            selectedIndex={draftMinuteIdx}
+            onSelect={setDraftMinuteIdx}
+            format={v => `${String(v).padStart(2, '0')} min`}
+            colors={colors}
+          />
+        </View>
+
+        {/* Live preview */}
+        <View style={modalStyles.previewRow}>
+          {(draftHourIdx > 0 || draftMinuteIdx > 0) ? (
+            <Text style={[modalStyles.previewText, { color: colors.accent }]}>
+              {formatStopDuration(draftHourIdx * 60 + MINUTE_ITEMS[draftMinuteIdx])} stop
+            </Text>
+          ) : (
+            <Text style={[modalStyles.previewText, { color: colors.sub }]}>No stop time</Text>
+          )}
+        </View>
+      </View>
+    </Modal>
+
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.bg }]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <ThemedText type="defaultSemiBold" style={[styles.title, { color: colors.text }]}>
           {name ?? 'Trip Details'}
@@ -253,94 +409,53 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
 
       {/* Transit Type Filter */}
       <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterBtn, {
-            backgroundColor: transitFilter === 'all' ? colors.accent : isDark ? '#3a3d42' : '#e8e8e8',
-          }]}
-          onPress={() => setTransitFilter('all')}
-        >
-          <ThemedText style={[styles.filterText, { color: transitFilter === 'all' ? '#fff' : colors.text }]}>
-            All
-          </ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterBtn, {
-            backgroundColor: transitFilter === 'subway' ? colors.accent : isDark ? '#3a3d42' : '#e8e8e8',
-          }]}
-          onPress={() => setTransitFilter('subway')}
-        >
-          <ThemedText style={[styles.filterText, { color: transitFilter === 'subway' ? '#fff' : colors.text }]}>
-            🚇 Metro
-          </ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterBtn, {
-            backgroundColor: transitFilter === 'bus' ? colors.accent : isDark ? '#3a3d42' : '#e8e8e8',
-          }]}
-          onPress={() => setTransitFilter('bus')}
-        >
-          <ThemedText style={[styles.filterText, { color: transitFilter === 'bus' ? '#fff' : colors.text }]}>
-            🚌 Bus
-          </ThemedText>
-        </TouchableOpacity>
+        {(['all', 'subway', 'bus'] as TransitFilter[]).map(filter => (
+          <TouchableOpacity
+            key={filter}
+            style={[styles.filterBtn, {
+              backgroundColor: transitFilter === filter ? colors.accent : isDark ? '#3a3d42' : '#e8e8e8',
+            }]}
+            onPress={() => setTransitFilter(filter)}
+          >
+            <ThemedText style={[styles.filterText, { color: transitFilter === filter ? '#fff' : colors.text }]}>
+              {filter === 'all' ? 'All' : filter === 'subway' ? '🚇 Metro' : '🚌 Bus'}
+            </ThemedText>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      {/* Per-stop duration selectors */}
-      {routes.length > 0 && locations.length > 1 && (
+      {/* Per-stop duration rows — tap to open wheel picker modal */}
+      {locations.length > 1 && (
         <View style={[styles.stopSection, { borderColor: colors.border }]}>
           <ThemedText style={[styles.stopSectionLabel, { color: colors.sub }]}>
             Stop Durations
           </ThemedText>
           {locations.slice(1).map((loc, i) => {
-            const currentMins = stopDurations[i] ?? 0;
-            const isCustomActive = activeCustomIdx === i;
+            const totalMins = stopDurations[i] ?? 0;
             const stopLabel = loc.name ? loc.name.split(',')[0] : `Stop ${i + 1}`;
+            const isLastStop = i === locations.length - 2;
             return (
-              <View key={i} style={[styles.stopRow, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity
+                key={i}
+                style={[styles.stopRow, styles.stopRowHeader, { borderBottomColor: colors.border }]}
+                onPress={() => openPicker(i)}
+                activeOpacity={0.7}
+              >
                 <ThemedText style={[styles.stopRowLabel, { color: colors.text }]} numberOfLines={1}>
-                  {stopLabel}
+                  {isLastStop ? '🏁' : '📍'} {stopLabel}
                 </ThemedText>
-                <View style={styles.stopButtons}>
-                  {[0, 15, 30, 60, 120].map(mins => {
-                    const isActive = currentMins === mins && !isCustomActive;
-                    const label = mins === 0 ? 'None' : mins < 60 ? `${mins}m` : `${mins / 60}h`;
-                    return (
-                      <TouchableOpacity
-                        key={mins}
-                        style={[styles.stopBtn, { borderColor: isActive ? colors.accent : colors.border }, isActive && { backgroundColor: colors.accent }]}
-                        onPress={() => { updateStopDuration(i, mins); setActiveCustomIdx(null); }}
-                      >
-                        <ThemedText style={[styles.stopBtnText, { color: isActive ? '#fff' : colors.text }]}>
-                          {label}
-                        </ThemedText>
-                      </TouchableOpacity>
-                    );
-                  })}
-                  <TouchableOpacity
-                    style={[styles.stopBtn, { borderColor: isCustomActive ? colors.accent : colors.border }, isCustomActive && { backgroundColor: colors.accent }]}
-                    onPress={() => { setActiveCustomIdx(i); setCustomStopInput(currentMins > 0 ? String(currentMins) : ''); }}
-                  >
-                    <ThemedText style={[styles.stopBtnText, { color: isCustomActive ? '#fff' : colors.text }]}>
-                      Custom
-                    </ThemedText>
-                  </TouchableOpacity>
+                <View style={styles.stopRowRight}>
+                  <ThemedText style={[
+                    styles.stopDurationBadge,
+                    {
+                      color: totalMins > 0 ? colors.accent : colors.sub,
+                      backgroundColor: totalMins > 0 ? (isDark ? '#1a3a5c' : '#e8f4fc') : 'transparent',
+                    },
+                  ]}>
+                    {totalMins > 0 ? formatStopDuration(totalMins) : 'Tap to set'}
+                  </ThemedText>
                 </View>
-                {isCustomActive && (
-                  <TextInput
-                    style={[styles.stopCustomInput, { color: colors.text, borderColor: colors.border }]}
-                    placeholder="Enter minutes"
-                    placeholderTextColor={colors.sub}
-                    keyboardType="numeric"
-                    value={customStopInput}
-                    onChangeText={text => {
-                      setCustomStopInput(text);
-                      const parsed = parseInt(text);
-                      if (!isNaN(parsed) && parsed >= 0) updateStopDuration(i, parsed);
-                    }}
-                    autoFocus
-                  />
-                )}
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -367,16 +482,22 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
       )}
 
       {filteredRoutes.map((route, routeIndex) => {
-        const leg = route.legs[0];
-        if (!leg) return null;
-        const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
+        const allSteps = route.legs.flatMap(l => l.steps);
+        const transitSteps = allSteps.filter(s => s.mode === 'TRANSIT');
         const modes = transitSteps.map(s => s.transitLine?.icon).join(' ');
+        const lineSummary = transitSteps.map(s => s.transitLine?.shortName || s.instruction).join(' → ');
 
-        // Build a summary of transit lines with their names
-        const lineSummary = transitSteps.map(s => {
-          const name = s.transitLine?.shortName || s.instruction;
-          return name;
-        }).join(' → ');
+        const transitMins = route.legs.reduce((sum, l) => sum + parseInt(l.duration || '0'), 0);
+        const totalMinsWithStops = transitMins + totalStopMins;
+        const totalDisplay = totalMinsWithStops < 60
+          ? `${totalMinsWithStops} min`
+          : formatStopDuration(totalMinsWithStops);
+        const departureTime = route.legs[0]?.departureTime;
+        const rawArrivalTime = route.legs[route.legs.length - 1]?.arrivalTime;
+        // Shift arrival forward by accumulated stop time
+        const arrivalTime = rawArrivalTime && totalStopMins > 0 && parseTimeToMinutes(rawArrivalTime) !== null
+          ? formatMinutesToTime(parseTimeToMinutes(rawArrivalTime)! + totalStopMins)
+          : rawArrivalTime;
 
         const isSelected = selectedRouteIndex === routeIndex;
 
@@ -403,17 +524,21 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
               </View>
               <View style={styles.routeTimeRow}>
                 <ThemedText type="defaultSemiBold" style={[styles.routeDuration, { color: colors.accent }]}>
-                  {leg.duration}{totalStopMins > 0 ? ` + ${formatStopDuration(totalStopMins)} stops` : ''}
+                  {totalDisplay}
                 </ThemedText>
-                {leg.departureTime && leg.arrivalTime && (
+                {totalStopMins > 0 && (
+                  <ThemedText style={[styles.stopBreakdown, { color: colors.sub }]}>
+                    {formatStopDuration(transitMins)} transit + {formatStopDuration(totalStopMins)} stops
+                  </ThemedText>
+                )}
+                {departureTime && arrivalTime && (
                   <ThemedText style={[styles.routeTimeRange, { color: colors.sub }]}>
-                    {leg.departureTime} – {leg.arrivalTime}
+                    {departureTime} – {arrivalTime}
                   </ThemedText>
                 )}
               </View>
             </View>
 
-            {/* Transit Line Summary */}
             {lineSummary && (
               <View style={styles.lineSummaryContainer}>
                 <ThemedText style={[styles.lineSummaryText, { color: colors.text }]}>
@@ -422,7 +547,7 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
               </View>
             )}
 
-            {leg.steps.map((step, stepIndex) => (
+            {allSteps.map((step, stepIndex) => (
               <View key={stepIndex} style={styles.stepRow}>
                 <View style={styles.stepLeft}>
                   <View style={styles.iconContainer}>
@@ -450,7 +575,6 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
                       </View>
                     )}
 
-                    {/* Show departure time for transit steps */}
                     {step.mode === 'TRANSIT' && step.departureTime && (
                       <View style={styles.departureInfo}>
                         <ThemedText style={[styles.departureText, { color: colors.accent, fontWeight: '600' }]}>
@@ -477,14 +601,10 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
 
                     <View style={styles.stepDetails}>
                       {step.duration && (
-                        <ThemedText style={[styles.stepMeta, { color: colors.sub }]}>
-                          {step.duration}
-                        </ThemedText>
+                        <ThemedText style={[styles.stepMeta, { color: colors.sub }]}>{step.duration}</ThemedText>
                       )}
                       {step.distance && (
-                        <ThemedText style={[styles.stepMeta, { color: colors.sub }]}>
-                          {step.distance}
-                        </ThemedText>
+                        <ThemedText style={[styles.stepMeta, { color: colors.sub }]}>{step.distance}</ThemedText>
                       )}
                     </View>
                   </View>
@@ -496,9 +616,10 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
             {stopDurations.map((mins, i) => {
               if (mins <= 0) return null;
               const stopLoc = locations[i + 1];
-              const isLast = i === stopDurations.length - 1;
-              const resumeTime = isLast && leg.arrivalTime && parseTimeToMinutes(leg.arrivalTime) !== null
-                ? formatMinutesToTime(parseTimeToMinutes(leg.arrivalTime)! + mins)
+              // Use the arrival time of the leg ending at this stop
+              const legForStop = route.legs[i];
+              const resumeTime = legForStop?.arrivalTime && parseTimeToMinutes(legForStop.arrivalTime) !== null
+                ? formatMinutesToTime(parseTimeToMinutes(legForStop.arrivalTime)! + mins)
                 : null;
               return (
                 <View key={i} style={[styles.stopDurationRow, { backgroundColor: isDark ? '#3a2a10' : '#fff8e1', borderColor: '#e67e22' }]}>
@@ -520,8 +641,72 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
         );
       })}
     </ScrollView>
+    </>
   );
 }
+
+const modalStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  sheet: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  sheetBtn: {
+    minWidth: 60,
+  },
+  sheetCancel: {
+    fontSize: 16,
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 8,
+  },
+  sheetDone: {
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  wheelsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 8,
+  },
+  wheelColon: {
+    fontSize: 28,
+    fontWeight: '300',
+    paddingHorizontal: 8,
+    marginBottom: 4,
+  },
+  previewRow: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  previewText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -574,6 +759,47 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
+  stopSection: {
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  stopSectionLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  stopRow: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  stopRowHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  stopRowLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+    marginRight: 8,
+  },
+  stopRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  stopDurationBadge: {
+    fontSize: 13,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
   routeCard: {
     borderRadius: 12,
     borderWidth: 1,
@@ -610,6 +836,10 @@ const styles = StyleSheet.create({
   routeTimeRange: {
     fontSize: 13,
     marginTop: 3,
+  },
+  stopBreakdown: {
+    fontSize: 11,
+    marginTop: 2,
   },
   lineSummaryContainer: {
     marginTop: 10,
@@ -703,10 +933,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
   },
-  agencyName: {
-    fontSize: 13,
-    fontStyle: 'italic',
-  },
   stepDetails: {
     flexDirection: 'row',
     gap: 12,
@@ -723,51 +949,6 @@ const styles = StyleSheet.create({
     bottom: -8,
     width: 1,
     borderStyle: 'dashed',
-  },
-  stopSection: {
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    paddingVertical: 10,
-    marginBottom: 12,
-  },
-  stopSectionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  stopRow: {
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  stopRowLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  stopButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  stopBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  stopBtnText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  stopCustomInput: {
-    marginTop: 8,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    fontSize: 14,
   },
   stopDurationRow: {
     marginTop: 10,

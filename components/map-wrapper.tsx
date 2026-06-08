@@ -88,7 +88,6 @@ export default function MapWrapper({
   initialRegion,
   onClearRoute,
   onDestinationSelected,
-  onAddStop,
   routePolylines,
   showSignIn,
   onSignIn,
@@ -97,7 +96,6 @@ export default function MapWrapper({
   initialRegion: Region;
   onClearRoute?: () => void;
   onDestinationSelected?: (origin: BookmarkLocation, destination: BookmarkLocation) => void;
-  onAddStop?: (stop: BookmarkLocation) => void;
   routePolylines?: RoutePolyline[];
   showSignIn?: boolean;
   onSignIn?: () => void;
@@ -113,7 +111,6 @@ export default function MapWrapper({
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [addStopMode, setAddStopMode] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Theme colors
@@ -204,26 +201,21 @@ export default function MapWrapper({
       name: result.formatted_address,
     };
 
-    if (addStopMode && onAddStop) {
-      onAddStop(selected);
-      setAddStopMode(false);
-    } else {
-      if (!currentLocation) {
-        setSearchError('Unable to get your current location. Please enable location services.');
-        return;
-      }
-      const origin: BookmarkLocation = {
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-        name: 'Current Location',
-      };
-      onDestinationSelected?.(origin, selected);
+    if (!currentLocation) {
+      setSearchError('Unable to get your current location. Please enable location services.');
+      return;
     }
+    const origin: BookmarkLocation = {
+      latitude: currentLocation.latitude,
+      longitude: currentLocation.longitude,
+      name: 'Current Location',
+    };
+    onDestinationSelected?.(origin, selected);
 
     setSearchQuery('');
     setSearchResults([]);
     setShowResults(false);
-  }, [addStopMode, currentLocation, onAddStop, onDestinationSelected]);
+  }, [currentLocation, onDestinationSelected]);
 
   // Build polylines for each step
   const polylines = routePolylines?.flatMap((route, routeIdx) =>
@@ -262,11 +254,11 @@ export default function MapWrapper({
           </TouchableOpacity>
         )}
 
-        <View style={[styles.searchContainer, { backgroundColor: addStopMode ? '#0a7ea4' : theme.card, flex: 1 }]}>
+        <View style={[styles.searchContainer, { backgroundColor: theme.card, flex: 1 }]}>
           <TextInput
-            style={[styles.searchInput, { color: addStopMode ? '#fff' : theme.text }]}
-            placeholder={addStopMode ? 'Search stop to add...' : 'Search destination...'}
-            placeholderTextColor={addStopMode ? 'rgba(255,255,255,0.7)' : theme.sub}
+            style={[styles.searchInput, { color: theme.text }]}
+            placeholder="Search destination..."
+            placeholderTextColor={theme.sub}
             value={searchQuery}
             onChangeText={handleSearch}
             onFocus={() => searchQuery && setShowResults(true)}
@@ -285,18 +277,6 @@ export default function MapWrapper({
           )}
         </View>
       </View>
-
-      {/* Add Stop Button — shown when route is active */}
-      {bookmarkLocations.length >= 2 && onAddStop && (
-        <TouchableOpacity
-          style={[styles.addStopBtn, { backgroundColor: addStopMode ? '#0a7ea4' : theme.card, borderColor: addStopMode ? '#0a7ea4' : theme.border }]}
-          onPress={() => setAddStopMode(m => !m)}
-        >
-          <Text style={[styles.addStopText, { color: addStopMode ? '#fff' : theme.text }]}>
-            {addStopMode ? 'Cancel' : '+ Add Stop'}
-          </Text>
-        </TouchableOpacity>
-      )}
 
       {/* Search Results Dropdown */}
       {showResults && (
@@ -449,18 +429,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  addStopBtn: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 100 : 80,
-    alignSelf: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    zIndex: 11,
-  },
-  addStopText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
 });
+
