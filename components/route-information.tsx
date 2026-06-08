@@ -123,10 +123,33 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
   const [error, setError] = useState<string | null>(null);
   const [transitFilter, setTransitFilter] = useState<TransitFilter>('all');
 
-  // Stop duration state — lives here so user can adjust it in the panel
-  const [stopDurationMins, setStopDurationMins] = useState(0);
-  const [showCustomStop, setShowCustomStop] = useState(false);
+  // Per-stop durations: index 0 = first stop after origin, last index = final destination
+  const [stopDurations, setStopDurations] = useState<number[]>([]);
+  const [activeCustomIdx, setActiveCustomIdx] = useState<number | null>(null);
   const [customStopInput, setCustomStopInput] = useState('');
+
+  // Sync array length when locations change
+  React.useEffect(() => {
+    const stopCount = Math.max(0, locations.length - 1);
+    setStopDurations(prev => {
+      if (prev.length === stopCount) return prev;
+      const next = Array(stopCount).fill(0);
+      prev.forEach((v, i) => { if (i < stopCount) next[i] = v; });
+      return next;
+    });
+    setActiveCustomIdx(null);
+    setCustomStopInput('');
+  }, [locations.length]);
+
+  const updateStopDuration = useCallback((idx: number, mins: number) => {
+    setStopDurations(prev => {
+      const next = [...prev];
+      next[idx] = mins;
+      return next;
+    });
+  }, []);
+
+  const totalStopMins = stopDurations.reduce((a, b) => a + b, 0);
 
   const fetchDirections = useCallback(async () => {
     if (locations.length < 2) return;
@@ -262,51 +285,64 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
         </TouchableOpacity>
       </View>
 
-      {/* Stop Duration Selector */}
-      {routes.length > 0 && (
+      {/* Per-stop duration selectors */}
+      {routes.length > 0 && locations.length > 1 && (
         <View style={[styles.stopSection, { borderColor: colors.border }]}>
           <ThemedText style={[styles.stopSectionLabel, { color: colors.sub }]}>
-            Stop at destination
+            Stop Durations
           </ThemedText>
-          <View style={styles.stopButtons}>
-            {[0, 15, 30, 60, 120].map(mins => {
-              const isActive = stopDurationMins === mins && !showCustomStop;
-              const label = mins === 0 ? 'None' : mins < 60 ? `${mins}m` : `${mins / 60}h`;
-              return (
-                <TouchableOpacity
-                  key={mins}
-                  style={[styles.stopBtn, { borderColor: isActive ? colors.accent : colors.border }, isActive && { backgroundColor: colors.accent }]}
-                  onPress={() => { setStopDurationMins(mins); setShowCustomStop(false); }}
-                >
-                  <ThemedText style={[styles.stopBtnText, { color: isActive ? '#fff' : colors.text }]}>
-                    {label}
-                  </ThemedText>
-                </TouchableOpacity>
-              );
-            })}
-            <TouchableOpacity
-              style={[styles.stopBtn, { borderColor: showCustomStop ? colors.accent : colors.border }, showCustomStop && { backgroundColor: colors.accent }]}
-              onPress={() => setShowCustomStop(true)}
-            >
-              <ThemedText style={[styles.stopBtnText, { color: showCustomStop ? '#fff' : colors.text }]}>
-                Custom
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
-          {showCustomStop && (
-            <TextInput
-              style={[styles.stopCustomInput, { color: colors.text, borderColor: colors.border }]}
-              placeholder="Enter minutes"
-              placeholderTextColor={colors.sub}
-              keyboardType="numeric"
-              value={customStopInput}
-              onChangeText={text => {
-                setCustomStopInput(text);
-                const parsed = parseInt(text);
-                if (!isNaN(parsed) && parsed >= 0) setStopDurationMins(parsed);
-              }}
-            />
-          )}
+          {locations.slice(1).map((loc, i) => {
+            const currentMins = stopDurations[i] ?? 0;
+            const isCustomActive = activeCustomIdx === i;
+            const stopLabel = loc.name ? loc.name.split(',')[0] : `Stop ${i + 1}`;
+            return (
+              <View key={i} style={[styles.stopRow, { borderBottomColor: colors.border }]}>
+                <ThemedText style={[styles.stopRowLabel, { color: colors.text }]} numberOfLines={1}>
+                  {stopLabel}
+                </ThemedText>
+                <View style={styles.stopButtons}>
+                  {[0, 15, 30, 60, 120].map(mins => {
+                    const isActive = currentMins === mins && !isCustomActive;
+                    const label = mins === 0 ? 'None' : mins < 60 ? `${mins}m` : `${mins / 60}h`;
+                    return (
+                      <TouchableOpacity
+                        key={mins}
+                        style={[styles.stopBtn, { borderColor: isActive ? colors.accent : colors.border }, isActive && { backgroundColor: colors.accent }]}
+                        onPress={() => { updateStopDuration(i, mins); setActiveCustomIdx(null); }}
+                      >
+                        <ThemedText style={[styles.stopBtnText, { color: isActive ? '#fff' : colors.text }]}>
+                          {label}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  <TouchableOpacity
+                    style={[styles.stopBtn, { borderColor: isCustomActive ? colors.accent : colors.border }, isCustomActive && { backgroundColor: colors.accent }]}
+                    onPress={() => { setActiveCustomIdx(i); setCustomStopInput(currentMins > 0 ? String(currentMins) : ''); }}
+                  >
+                    <ThemedText style={[styles.stopBtnText, { color: isCustomActive ? '#fff' : colors.text }]}>
+                      Custom
+                    </ThemedText>
+                  </TouchableOpacity>
+                </View>
+                {isCustomActive && (
+                  <TextInput
+                    style={[styles.stopCustomInput, { color: colors.text, borderColor: colors.border }]}
+                    placeholder="Enter minutes"
+                    placeholderTextColor={colors.sub}
+                    keyboardType="numeric"
+                    value={customStopInput}
+                    onChangeText={text => {
+                      setCustomStopInput(text);
+                      const parsed = parseInt(text);
+                      if (!isNaN(parsed) && parsed >= 0) updateStopDuration(i, parsed);
+                    }}
+                    autoFocus
+                  />
+                )}
+              </View>
+            );
+          })}
         </View>
       )}
 
@@ -367,7 +403,7 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
               </View>
               <View style={styles.routeTimeRow}>
                 <ThemedText type="defaultSemiBold" style={[styles.routeDuration, { color: colors.accent }]}>
-                  {leg.duration}{stopDurationMins > 0 ? ` + ${formatStopDuration(stopDurationMins)} stop` : ''}
+                  {leg.duration}{totalStopMins > 0 ? ` + ${formatStopDuration(totalStopMins)} stops` : ''}
                 </ThemedText>
                 {leg.departureTime && leg.arrivalTime && (
                   <ThemedText style={[styles.routeTimeRange, { color: colors.sub }]}>
@@ -457,21 +493,29 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
               </View>
             ))}
 
-            {stopDurationMins > 0 && (
-              <View style={[styles.stopDurationRow, { backgroundColor: isDark ? '#3a2a10' : '#fff8e1', borderColor: '#e67e22' }]}>
-                <View style={styles.stopDurationHeader}>
-                  <ThemedText style={[styles.stopDurationIcon, { color: '#e67e22' }]}>⏱</ThemedText>
-                  <ThemedText style={[styles.stopDurationLabel, { color: '#e67e22' }]}>
-                    {`Stop: ${formatStopDuration(stopDurationMins)}`}
-                  </ThemedText>
+            {stopDurations.map((mins, i) => {
+              if (mins <= 0) return null;
+              const stopLoc = locations[i + 1];
+              const isLast = i === stopDurations.length - 1;
+              const resumeTime = isLast && leg.arrivalTime && parseTimeToMinutes(leg.arrivalTime) !== null
+                ? formatMinutesToTime(parseTimeToMinutes(leg.arrivalTime)! + mins)
+                : null;
+              return (
+                <View key={i} style={[styles.stopDurationRow, { backgroundColor: isDark ? '#3a2a10' : '#fff8e1', borderColor: '#e67e22' }]}>
+                  <View style={styles.stopDurationHeader}>
+                    <ThemedText style={[styles.stopDurationIcon, { color: '#e67e22' }]}>⏱</ThemedText>
+                    <ThemedText style={[styles.stopDurationLabel, { color: '#e67e22' }]}>
+                      {`Stop ${i + 1}${stopLoc?.name ? `: ${stopLoc.name.split(',')[0]}` : ''} — ${formatStopDuration(mins)}`}
+                    </ThemedText>
+                  </View>
+                  {resumeTime && (
+                    <ThemedText style={[styles.stopResumeText, { color: colors.sub }]}>
+                      {`Resume transit at ${resumeTime}`}
+                    </ThemedText>
+                  )}
                 </View>
-                {leg.arrivalTime && parseTimeToMinutes(leg.arrivalTime) !== null && (
-                  <ThemedText style={[styles.stopResumeText, { color: colors.sub }]}>
-                    {`Resume transit at ${formatMinutesToTime(parseTimeToMinutes(leg.arrivalTime)! + stopDurationMins)}`}
-                  </ThemedText>
-                )}
-              </View>
-            )}
+              );
+            })}
           </TouchableOpacity>
         );
       })}
@@ -692,6 +736,15 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 8,
+  },
+  stopRow: {
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  stopRowLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 6,
   },
   stopButtons: {
     flexDirection: 'row',

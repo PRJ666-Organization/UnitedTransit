@@ -77,7 +77,17 @@ export default function HomeScreen() {
   const handleDestinationSelected = useCallback((origin: BookmarkLocation, destination: BookmarkLocation) => {
     setDisplayLocations([origin, destination]);
     setTripName('Route to Destination');
-    setSelectedRouteIndex(0); // Reset to first route
+    setSelectedRouteIndex(0);
+  }, []);
+
+  // Insert an intermediate stop before the final destination
+  const handleAddStop = useCallback((stop: BookmarkLocation) => {
+    setDisplayLocations(prev => {
+      if (prev.length < 2) return prev;
+      const next = [...prev];
+      next.splice(next.length - 1, 0, stop);
+      return next;
+    });
   }, []);
 
   // Callback for when routes are loaded
@@ -101,6 +111,7 @@ export default function HomeScreen() {
         initialRegion={region}
         onClearRoute={clearRoute}
         onDestinationSelected={handleDestinationSelected}
+        onAddStop={handleAddStop}
         routePolylines={selectedRoutePolyline}
         showSignIn={!user}
         onSignIn={() => router.push('/login')}

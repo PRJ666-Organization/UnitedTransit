@@ -68,6 +68,7 @@ export default function MapWrapper({
   initialRegion,
   onClearRoute,
   onDestinationSelected,
+  onAddStop,
   routePolylines,
   showSignIn,
   onSignIn,
@@ -81,6 +82,7 @@ export default function MapWrapper({
   };
   onClearRoute?: () => void;
   onDestinationSelected?: (origin: BookmarkLocation, destination: BookmarkLocation) => void;
+  onAddStop?: (stop: BookmarkLocation) => void;
   routePolylines?: RoutePolyline[];
   showSignIn?: boolean;
   onSignIn?: () => void;
@@ -95,6 +97,7 @@ export default function MapWrapper({
   const autoCompleteRef = useRef<any>(null);
 
   const [home, setHome] = useState<{ lat: number; lng: number } | null>(null);
+  const [addStopMode, setAddStopMode] = useState(false);
 
 
   useEffect(() => {
@@ -131,7 +134,10 @@ export default function MapWrapper({
       name: place.formatted_address || place.name || 'Selected Destination',
     };
 
-    if (home && onDestinationSelected) {
+    if (addStopMode && onAddStop) {
+      onAddStop(destination);
+      setAddStopMode(false);
+    } else if (home && onDestinationSelected) {
       const origin: BookmarkLocation = {
         latitude: home.lat,
         longitude: home.lng,
@@ -236,12 +242,12 @@ export default function MapWrapper({
         >
           <input
             type="text"
-            placeholder="Search destination..."
+            placeholder={addStopMode ? 'Search stop to add...' : 'Search destination...'}
             style={{
               width: '300px',
               padding: '10px',
               borderRadius: '8px',
-              border: '1px solid #ccc',
+              border: `1px solid ${addStopMode ? '#0a7ea4' : '#ccc'}`,
             }}
           />
         </Autocomplete>
@@ -264,9 +270,26 @@ export default function MapWrapper({
           </button>
         )}
 
+        {bookmarkLocations.length >= 2 && onAddStop && (
+          <button
+            onClick={() => setAddStopMode(m => !m)}
+            style={{
+              padding: '10px 12px',
+              borderRadius: '8px',
+              border: `1px solid ${addStopMode ? '#0a7ea4' : '#ccc'}`,
+              background: addStopMode ? '#0a7ea4' : '#fff',
+              color: addStopMode ? '#fff' : '#111',
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
+          >
+            {addStopMode ? 'Cancel Add Stop' : '+ Add Stop'}
+          </button>
+        )}
+
         {bookmarkLocations.length > 0 && (
           <button
-            onClick={() => onClearRoute?.()}
+            onClick={() => { onClearRoute?.(); setAddStopMode(false); }}
             style={{
               padding: '10px 12px',
               borderRadius: '8px',
