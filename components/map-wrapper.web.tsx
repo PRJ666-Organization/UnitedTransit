@@ -1,12 +1,16 @@
 import { mapStyle } from '@/styles/map-style';
 import { BookmarkLocation } from '@/hooks/use-auth';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
   Autocomplete,
   GoogleMap,
   Marker,
   Polyline,
   useJsApiLoader,
+  type Libraries,
 } from '@react-google-maps/api';
+
+const LIBRARIES: Libraries = ['places'];
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type RoutePolyline = {
@@ -81,9 +85,10 @@ export default function MapWrapper({
   showSignIn?: boolean;
   onSignIn?: () => void;
 }) {
+  const isDark = useColorScheme() === 'dark';
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
-    libraries: ['places'],
+    libraries: LIBRARIES,
   });
 
   const mapRef = useRef<any>(null);
@@ -282,7 +287,7 @@ export default function MapWrapper({
         center={center}
         zoom={zoom}
         options={{
-          styles: mapStyle,
+          styles: isDark ? mapStyle : undefined,
         }}
       >
         {bookmarkLocations.map((loc, i) => (
@@ -301,8 +306,9 @@ export default function MapWrapper({
               path={pl!.coords}
               options={{
                 strokeColor: pl!.color,
-                strokeWeight: pl!.isWalking ? 2 : 4,
-                strokeOpacity: 0.8,
+                strokeWeight: pl!.isWalking ? 2 : 5,
+                strokeOpacity: pl!.isWalking ? 0.6 : 1.0,
+                zIndex: pl!.isWalking ? 1 : 2,
                 icons: pl!.isWalking ? [
                   {
                     icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 2 },

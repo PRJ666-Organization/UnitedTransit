@@ -4,6 +4,7 @@ import { ActivityIndicator, Platform, StyleSheet, Text, TextInput, TouchableOpac
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { BookmarkLocation } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { mapStyle } from '@/styles/map-style';
 
 type GeoResult = {
   formatted_address: string;
@@ -225,7 +226,7 @@ export default function MapWrapper({
       if (coords.length === 0) return null;
 
       const color = step.mode === 'WALKING'
-        ? '#666666'
+        ? '#888888'
         : step.color || '#0a7ea4';
 
       return (
@@ -234,7 +235,8 @@ export default function MapWrapper({
           coordinates={coords}
           strokeColor={color}
           strokeWidth={step.mode === 'WALKING' ? 3 : 5}
-          lineDashPattern={step.mode === 'WALKING' ? [5, 5] : undefined}
+          strokeOpacity={step.mode === 'WALKING' ? 0.6 : 1.0}
+          lineDashPattern={step.mode === 'WALKING' ? [6, 4] : undefined}
         />
       );
     }).filter(Boolean)
@@ -313,6 +315,7 @@ export default function MapWrapper({
         region={initialRegion}
         showsUserLocation={true}
         showsMyLocationButton={false}
+        customMapStyle={isDark ? mapStyle : undefined}
       >
         {bookmarkLocations.map((loc, i) => (
           <Marker

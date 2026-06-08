@@ -1,9 +1,39 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
+import React, { createContext, useContext, useState } from 'react';
+import { Platform, useColorScheme as useRNColorScheme } from 'react-native';
 
-import { Platform } from 'react-native';
+export type ThemePreference = 'light' | 'dark' | 'system';
+
+type ThemeContextValue = {
+  preference: ThemePreference;
+  setPreference: (p: ThemePreference) => void;
+  colorScheme: 'light' | 'dark';
+};
+
+const ThemeContext = createContext<ThemeContextValue>({
+  preference: 'system',
+  setPreference: () => {},
+  colorScheme: 'light',
+});
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const systemScheme = useRNColorScheme();
+  const [preference, setPreference] = useState<ThemePreference>('system');
+
+  const colorScheme: 'light' | 'dark' =
+    preference === 'system' ? (systemScheme ?? 'light') : preference;
+
+  return (
+    <ThemeContext.Provider value={{ preference, setPreference, colorScheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+export function useThemeContext() {
+  return useContext(ThemeContext);
+}
+
+// Original theme colors and fonts below
 
 const tintColorLight = '#0a7ea4';
 const tintColorDark = '#fff';
