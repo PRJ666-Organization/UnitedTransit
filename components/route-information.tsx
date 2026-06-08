@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { BookmarkLocation } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -49,6 +49,35 @@ type TransitFilter = 'all' | 'subway' | 'bus';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
+// Parse "2:30 pm" / "12:05 am" into total minutes since midnight
+function parseTimeToMinutes(timeStr: string): number | null {
+  const match = timeStr.match(/(\d+):(\d+)\s*(am|pm)/i);
+  if (!match) return null;
+  let hours = parseInt(match[1]);
+  const minutes = parseInt(match[2]);
+  const period = match[3].toLowerCase();
+  if (period === 'pm' && hours !== 12) hours += 12;
+  if (period === 'am' && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+}
+
+function formatMinutesToTime(totalMinutes: number): string {
+  const wrapped = ((totalMinutes % 1440) + 1440) % 1440;
+  const h = Math.floor(wrapped / 60);
+  const m = wrapped % 60;
+  const period = h >= 12 ? 'pm' : 'am';
+  const displayH = h % 12 || 12;
+  return `${displayH}:${m.toString().padStart(2, '0')} ${period}`;
+}
+
+function formatStopDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+}
+
 // Map transit types to categories - including all possible vehicle types from Google
 const SUBWAY_VEHICLE_TYPES = ['SUBWAY_TRAIN', 'METRO_RAIL', 'HEAVY_RAIL', 'COMMUTER_TRAIN', 'HIGH_SPEED_TRAIN', 'RAIL'];
 const BUS_VEHICLE_TYPES = ['BUS', 'TROLLEYBUS', 'TROLLEY_BUS'];
@@ -93,6 +122,11 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [transitFilter, setTransitFilter] = useState<TransitFilter>('all');
+
+  // Stop duration state — lives here so user can adjust it in the panel
+  const [stopDurationMins, setStopDurationMins] = useState(0);
+  const [showCustomStop, setShowCustomStop] = useState(false);
+  const [customStopInput, setCustomStopInput] = useState('');
 
   const fetchDirections = useCallback(async () => {
     if (locations.length < 2) return;
@@ -228,6 +262,54 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
         </TouchableOpacity>
       </View>
 
+      {/* Stop Duration Selector */}
+      {routes.length > 0 && (
+        <View style={[styles.stopSection, { borderColor: colors.border }]}>
+          <ThemedText style={[styles.stopSectionLabel, { color: colors.sub }]}>
+            Stop at destination
+          </ThemedText>
+          <View style={styles.stopButtons}>
+            {[0, 15, 30, 60, 120].map(mins => {
+              const isActive = stopDurationMins === mins && !showCustomStop;
+              const label = mins === 0 ? 'None' : mins < 60 ? `${mins}m` : `${mins / 60}h`;
+              return (
+                <TouchableOpacity
+                  key={mins}
+                  style={[styles.stopBtn, { borderColor: isActive ? colors.accent : colors.border }, isActive && { backgroundColor: colors.accent }]}
+                  onPress={() => { setStopDurationMins(mins); setShowCustomStop(false); }}
+                >
+                  <ThemedText style={[styles.stopBtnText, { color: isActive ? '#fff' : colors.text }]}>
+                    {label}
+                  </ThemedText>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={[styles.stopBtn, { borderColor: showCustomStop ? colors.accent : colors.border }, showCustomStop && { backgroundColor: colors.accent }]}
+              onPress={() => setShowCustomStop(true)}
+            >
+              <ThemedText style={[styles.stopBtnText, { color: showCustomStop ? '#fff' : colors.text }]}>
+                Custom
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+          {showCustomStop && (
+            <TextInput
+              style={[styles.stopCustomInput, { color: colors.text, borderColor: colors.border }]}
+              placeholder="Enter minutes"
+              placeholderTextColor={colors.sub}
+              keyboardType="numeric"
+              value={customStopInput}
+              onChangeText={text => {
+                setCustomStopInput(text);
+                const parsed = parseInt(text);
+                if (!isNaN(parsed) && parsed >= 0) setStopDurationMins(parsed);
+              }}
+            />
+          )}
+        </View>
+      )}
+
       {loading && (
         <View style={styles.loadingContainer}>
           <ThemedText style={[styles.loadingText, { color: colors.sub }]}>Finding transit routes...</ThemedText>
@@ -285,7 +367,7 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
               </View>
               <View style={styles.routeTimeRow}>
                 <ThemedText type="defaultSemiBold" style={[styles.routeDuration, { color: colors.accent }]}>
-                  {leg.duration}
+                  {leg.duration}{stopDurationMins > 0 ? ` + ${formatStopDuration(stopDurationMins)} stop` : ''}
                 </ThemedText>
                 {leg.departureTime && leg.arrivalTime && (
                   <ThemedText style={[styles.routeTimeRange, { color: colors.sub }]}>
@@ -374,6 +456,22 @@ export default function RouteInformation({ locations, name, onClear, onRoutesLoa
                 <View style={[styles.stepLine, { borderColor: colors.border }]} />
               </View>
             ))}
+
+            {stopDurationMins > 0 && (
+              <View style={[styles.stopDurationRow, { backgroundColor: isDark ? '#3a2a10' : '#fff8e1', borderColor: '#e67e22' }]}>
+                <View style={styles.stopDurationHeader}>
+                  <ThemedText style={[styles.stopDurationIcon, { color: '#e67e22' }]}>⏱</ThemedText>
+                  <ThemedText style={[styles.stopDurationLabel, { color: '#e67e22' }]}>
+                    {`Stop: ${formatStopDuration(stopDurationMins)}`}
+                  </ThemedText>
+                </View>
+                {leg.arrivalTime && parseTimeToMinutes(leg.arrivalTime) !== null && (
+                  <ThemedText style={[styles.stopResumeText, { color: colors.sub }]}>
+                    {`Resume transit at ${formatMinutesToTime(parseTimeToMinutes(leg.arrivalTime)! + stopDurationMins)}`}
+                  </ThemedText>
+                )}
+              </View>
+            )}
           </TouchableOpacity>
         );
       })}
@@ -581,5 +679,65 @@ const styles = StyleSheet.create({
     bottom: -8,
     width: 1,
     borderStyle: 'dashed',
+  },
+  stopSection: {
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  stopSectionLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  stopButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  stopBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  stopBtnText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  stopCustomInput: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 14,
+  },
+  stopDurationRow: {
+    marginTop: 10,
+    marginBottom: 4,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  stopDurationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  stopDurationIcon: {
+    fontSize: 16,
+  },
+  stopDurationLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  stopResumeText: {
+    fontSize: 13,
+    marginTop: 4,
+    marginLeft: 22,
   },
 });

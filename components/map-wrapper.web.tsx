@@ -96,6 +96,7 @@ export default function MapWrapper({
 
   const [home, setHome] = useState<{ lat: number; lng: number } | null>(null);
 
+
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition((position) => {
@@ -130,7 +131,6 @@ export default function MapWrapper({
       name: place.formatted_address || place.name || 'Selected Destination',
     };
 
-    // If we have the user's location and a callback, create a route
     if (home && onDestinationSelected) {
       const origin: BookmarkLocation = {
         latitude: home.lat,
@@ -139,7 +139,6 @@ export default function MapWrapper({
       };
       onDestinationSelected(origin, destination);
     } else if (mapRef.current) {
-      // Fallback: just pan to the location
       mapRef.current.panTo({ lat: destination.latitude, lng: destination.longitude });
       mapRef.current.setZoom(14);
     }
