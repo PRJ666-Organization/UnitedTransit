@@ -1,12 +1,49 @@
-import React, { useState } from 'react';
-import { AuthContext, AuthUser, BookmarkLocation } from '@/hooks/use-auth';
+import React, { useState, useCallback, useEffect } from 'react';
+import { AuthContext, AuthUser, BookmarkLocation, SearchHistoryItem } from '@/hooks/use-auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+const DEVICE_ID_KEY = 'united_transit_device_id';
+const SEARCH_HISTORY_KEY = 'search_history_anonymous';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [pendingVerifyUrl, setPendingVerifyUrl] = useState<string | null>(null);
   const [activeBookmarkLocations, setActiveBookmarkLocations] = useState<BookmarkLocation[]>([]);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+
+  // Generate or retrieve device ID on mount
+  useEffect(() => {
+    const initDeviceId = async () => {
+      try {
+        let storedId = await AsyncStorage.getItem(DEVICE_ID_KEY);
+        if (!storedId) {
+          storedId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          await AsyncStorage.setItem(DEVICE_ID_KEY, storedId);
+        }
+        setDeviceId(storedId);
+      } catch (e) {
+        console.error('[DeviceId] Error:', e);
+        setDeviceId(`device_${Date.now()}`);
+      }
+    };
+    initDeviceId();
+  }, []);
+
+  const getDeviceId = useCallback(async (): Promise<string> => {
+    if (deviceId) return deviceId;
+    try {
+      let storedId = await AsyncStorage.getItem(DEVICE_ID_KEY);
+      if (!storedId) {
+        storedId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        await AsyncStorage.setItem(DEVICE_ID_KEY, storedId);
+      }
+      setDeviceId(storedId);
+      return storedId;
+    } catch {
+      return `device_${Date.now()}`;
+    }
+  }, [deviceId]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
@@ -126,8 +163,80 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const fetchSearchHistory = useCallback(async (): Promise<SearchHistoryItem[]> => {
+    try {
+      if (user?.token) {
+        // Authenticated user - fetch from server
+        const res = await fetch(`${API_URL}/search-history`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+        if (!res.ok) return [];
+        return await res.json();
+      } else {
+        // Anonymous user - fetch from AsyncStorage
+        const stored = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
+        return stored ? JSON.parse(stored) : [];
+      }
+    } catch (e) {
+      console.error('[SearchHistory] Fetch error', e);
+      return [];
+    }
+  }, [user?.token]);
+
+  const saveSearchHistory = useCallback(async (locations: BookmarkLocation[]): Promise<boolean> => {
+    try {
+      if (user?.token) {
+        // Authenticated user - save to server
+        const res = await fetch(`${API_URL}/search-history`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${user.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ locations }),
+        });
+        return res.ok;
+      } else {
+        // Anonymous user - save to AsyncStorage
+        const stored = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
+        const history: SearchHistoryItem[] = stored ? JSON.parse(stored) : [];
+
+        // Add new entry at beginning
+        history.unshift({
+          search_id: Date.now(),
+          locations_json: JSON.stringify(locations),
+          searched_at: new Date().toISOString(),
+        });
+
+        // Keep only last 3
+        const trimmed = history.slice(0, 3);
+        await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(trimmed));
+        return true;
+      }
+    } catch (e) {
+      console.error('[SearchHistory] Save error', e);
+      return false;
+    }
+  }, [user?.token]);
+
   return (
-    <AuthContext.Provider value={{ user, pendingVerifyUrl, login, register, verifyEmail, logout, setTestUser, fetchBookmarks, createBookmark, deleteBookmark, activeBookmarkLocations, setActiveBookmarkLocations }}>
+    <AuthContext.Provider value={{
+      user,
+      pendingVerifyUrl,
+      login,
+      register,
+      verifyEmail,
+      logout,
+      setTestUser,
+      fetchBookmarks,
+      createBookmark,
+      deleteBookmark,
+      activeBookmarkLocations,
+      setActiveBookmarkLocations,
+      fetchSearchHistory,
+      saveSearchHistory,
+      getDeviceId,
+    }}>
       {children}
     </AuthContext.Provider>
   );

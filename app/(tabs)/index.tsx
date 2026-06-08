@@ -1,10 +1,10 @@
-import { BookmarkLocation, useAuth } from '@/hooks/use-auth';
+import { BookmarkLocation, useAuth, SearchHistoryItem } from '@/hooks/use-auth';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Region } from 'react-native-maps';
 import MapWrapper from '../../components/map-wrapper';
-import RouteInformation from '../../components/route-information';
+import RouteInformation, { DepartureTime } from '../../components/route-information';
 
 type RoutePolyline = {
   steps: {
@@ -15,12 +15,26 @@ type RoutePolyline = {
 };
 
 export default function HomeScreen() {
-  const { activeBookmarkLocations, setActiveBookmarkLocations, user } = useAuth();
+  const {
+    activeBookmarkLocations,
+    setActiveBookmarkLocations,
+    user,
+    fetchSearchHistory,
+    saveSearchHistory,
+  } = useAuth();
   const router = useRouter();
   const [displayLocations, setDisplayLocations] = useState<BookmarkLocation[]>([]);
   const [tripName, setTripName] = useState<string>('');
   const [allRoutePolylines, setAllRoutePolylines] = useState<RoutePolyline[]>([]);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState<number>(0);
+  const [recentSearches, setRecentSearches] = useState<SearchHistoryItem[]>([]);
+  const [isAddingWaypoint, setIsAddingWaypoint] = useState(false);
+  const [departureTimes, setDepartureTimes] = useState<DepartureTime[]>([]);
+
+  // Load recent searches on mount and when user changes
+  useEffect(() => {
+    fetchSearchHistory().then(setRecentSearches);
+  }, [user, fetchSearchHistory]);
 
   useFocusEffect(
     useCallback(() => {
@@ -40,6 +54,8 @@ export default function HomeScreen() {
     setDisplayLocations([]);
     setAllRoutePolylines([]);
     setSelectedRouteIndex(0);
+    setIsAddingWaypoint(false);
+    setDepartureTimes([]);
   }, [setActiveBookmarkLocations]);
 
   const region = useMemo((): Region => {
@@ -74,16 +90,95 @@ export default function HomeScreen() {
   }, [displayLocations]);
 
   // Callback for when a destination is selected from the map search
-  const handleDestinationSelected = useCallback((origin: BookmarkLocation, destination: BookmarkLocation) => {
-    setDisplayLocations([origin, destination]);
+  const handleDestinationSelected = useCallback(async (origin: BookmarkLocation, destination: BookmarkLocation) => {
+    const locations = [origin, destination];
+    setDisplayLocations(locations);
     setTripName('Route to Destination');
     setSelectedRouteIndex(0);
-  }, []);
+    setIsAddingWaypoint(false);
+
+    // Save to search history
+    await saveSearchHistory(locations);
+    const updated = await fetchSearchHistory();
+    setRecentSearches(updated);
+  }, [saveSearchHistory, fetchSearchHistory]);
 
   // Callback for when routes are loaded
   const handleRoutesLoaded = useCallback((polylines: RoutePolyline[]) => {
     setAllRoutePolylines(polylines);
     setSelectedRouteIndex(0); // Select first route by default
+  }, []);
+
+  // Handle selecting a recent search
+  const handleSelectRecentSearch = useCallback((locations: BookmarkLocation[]) => {
+    setDisplayLocations(locations);
+    setTripName(locations.length > 2 ? 'Multi-Stop Route' : 'Recent Route');
+    setSelectedRouteIndex(0);
+    setActiveBookmarkLocations(locations);
+    setIsAddingWaypoint(false);
+  }, [setActiveBookmarkLocations]);
+
+  // Handle adding a waypoint
+  const handleAddWaypoint = useCallback(() => {
+    setIsAddingWaypoint(true);
+  }, []);
+
+  // Handle waypoint added from search
+  const handleWaypointAdded = useCallback(async (waypoint: BookmarkLocation) => {
+    // Insert waypoint before destination
+    const newLocations = [...displayLocations];
+    newLocations.splice(newLocations.length - 1, 0, waypoint);
+    setDisplayLocations(newLocations);
+    setActiveBookmarkLocations(newLocations);
+    setIsAddingWaypoint(false);
+
+    // Save updated route to search history
+    await saveSearchHistory(newLocations);
+    const updated = await fetchSearchHistory();
+    setRecentSearches(updated);
+  }, [displayLocations, setActiveBookmarkLocations, saveSearchHistory, fetchSearchHistory]);
+
+  // Handle removing a waypoint
+  const handleRemoveWaypoint = useCallback(async (index: number) => {
+    const newLocations = displayLocations.filter((_, i) => i !== index);
+    setDisplayLocations(newLocations);
+    setActiveBookmarkLocations(newLocations);
+
+    // Save updated route to search history if still valid
+    if (newLocations.length >= 2) {
+      await saveSearchHistory(newLocations);
+      const updated = await fetchSearchHistory();
+      setRecentSearches(updated);
+    }
+  }, [displayLocations, setActiveBookmarkLocations, saveSearchHistory, fetchSearchHistory]);
+
+  // Handle reordering stops
+  const handleReorderStops = useCallback(async (fromIndex: number, toIndex: number) => {
+    const newLocations = [...displayLocations];
+    const [removed] = newLocations.splice(fromIndex, 1);
+    newLocations.splice(toIndex, 0, removed);
+
+    setDisplayLocations(newLocations);
+    setActiveBookmarkLocations(newLocations);
+    setTripName(newLocations.length > 2 ? 'Multi-Stop Route' : 'Route to Destination');
+
+    // Reset departure times when stops are reordered
+    setDepartureTimes([]);
+
+    // Save reordered route to search history
+    await saveSearchHistory(newLocations);
+    const updated = await fetchSearchHistory();
+    setRecentSearches(updated);
+  }, [displayLocations, setActiveBookmarkLocations, saveSearchHistory, fetchSearchHistory]);
+
+  // Handle departure time change for a section
+  const handleDepartureTimeChange = useCallback((sectionIndex: number, time: string) => {
+    setDepartureTimes(prev => {
+      // Remove existing entry for this section
+      const filtered = prev.filter(d => d.sectionIndex !== sectionIndex);
+      // Add new entry
+      return [...filtered, { sectionIndex, time }];
+    });
   }, []);
 
   // Get the polyline for the selected route only
@@ -104,6 +199,10 @@ export default function HomeScreen() {
         routePolylines={selectedRoutePolyline}
         showSignIn={!user}
         onSignIn={() => router.push('/login')}
+        recentSearches={recentSearches}
+        onSelectRecentSearch={handleSelectRecentSearch}
+        isAddingWaypoint={isAddingWaypoint}
+        onWaypointAdded={handleWaypointAdded}
       />
       <RouteInformation
         locations={displayLocations}
@@ -112,6 +211,13 @@ export default function HomeScreen() {
         onRoutesLoaded={handleRoutesLoaded}
         onRouteSelected={setSelectedRouteIndex}
         selectedRouteIndex={selectedRouteIndex}
+        onAddWaypoint={handleAddWaypoint}
+        onRemoveWaypoint={handleRemoveWaypoint}
+        onReorderStops={handleReorderStops}
+        isAddingWaypoint={isAddingWaypoint}
+        onCancelAddWaypoint={() => setIsAddingWaypoint(false)}
+        departureTimes={departureTimes}
+        onDepartureTimeChange={handleDepartureTimeChange}
       />
     </View>
   );

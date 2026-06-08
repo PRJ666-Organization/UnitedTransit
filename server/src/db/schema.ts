@@ -321,6 +321,18 @@ export const SCHEMA_SQL = `
     CONSTRAINT fk_vt_user FOREIGN KEY (user_id) REFERENCES user (user_id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS search_history (
+    search_id       INTEGER NOT NULL,
+    user_id         INTEGER,
+    locations_json  TEXT    NOT NULL,
+    searched_at     TEXT    NOT NULL,
+    device_id       TEXT,
+    CONSTRAINT pk_search_history PRIMARY KEY (search_id AUTOINCREMENT),
+    CONSTRAINT fk_search_user
+        FOREIGN KEY (user_id) REFERENCES user (user_id)
+        ON DELETE CASCADE
+  );
+
   CREATE UNIQUE INDEX IF NOT EXISTS idx_user_email ON user (email);
   CREATE INDEX IF NOT EXISTS idx_user_admin        ON user (is_admin);
   CREATE INDEX IF NOT EXISTS idx_trip_user         ON trip (user_id);
@@ -337,4 +349,6 @@ export const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_gtfs_stop_times_trip ON gtfs_stop_times(trip_id);
   CREATE INDEX IF NOT EXISTS idx_gtfs_trips_route ON gtfs_trips(route_id);
   CREATE INDEX IF NOT EXISTS idx_gtfs_shapes_shape ON gtfs_shapes(shape_id);
+  CREATE INDEX IF NOT EXISTS idx_search_history_user ON search_history (user_id);
+  CREATE INDEX IF NOT EXISTS idx_search_history_device ON search_history (device_id);
 `;
