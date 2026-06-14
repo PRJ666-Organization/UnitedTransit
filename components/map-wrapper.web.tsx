@@ -1,4 +1,3 @@
-import { mapStyle } from '@/styles/map-style';
 import { BookmarkLocation } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
@@ -9,9 +8,9 @@ import {
   useJsApiLoader,
   type Libraries,
 } from '@react-google-maps/api';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const LIBRARIES: Libraries = ['places'];
-import { useEffect, useMemo, useRef, useState } from 'react';
 
 type RoutePolyline = {
   steps: {
@@ -98,7 +97,23 @@ export default function MapWrapper({
 
   const [home, setHome] = useState<{ lat: number; lng: number } | null>(null);
   const [addStopMode, setAddStopMode] = useState(false);
+  const [heading, setHeading] = useState(0);
 
+  const prevHeadingRef = useRef(0);
+
+  function getSmoothHeading(newHeading: number) {
+    const prev = prevHeadingRef.current;
+
+    let diff = newHeading - prev;
+
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+
+    const result = prev + diff;
+    prevHeadingRef.current = result;
+
+    return result;
+  }
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -120,8 +135,15 @@ export default function MapWrapper({
     mapRef.current.fitBounds(bounds);
   }, [bookmarkLocations, isLoaded]);
 
-  const onLoad = (map: any) => {
+  const onLoad = (map: google.maps.Map) => {
     mapRef.current = map;
+
+    setHeading(map.getHeading() || 0);
+
+    map.addListener('heading_changed', () => {
+      setHeading(map.getHeading() || 0);
+      console.log('HEADING UPDATED');
+    });
   };
 
   const onPlaceChanged = () => {
@@ -177,8 +199,8 @@ export default function MapWrapper({
     return 10;
   }, [bookmarkLocations]);
 
-  const polylineCoords = useMemo(() =>
-    bookmarkLocations.map((loc) => ({ lat: loc.latitude, lng: loc.longitude })),
+  const polylineCoords = useMemo(
+    () => bookmarkLocations.map((loc) => ({ lat: loc.latitude, lng: loc.longitude })),
     [bookmarkLocations],
   );
 
@@ -186,21 +208,27 @@ export default function MapWrapper({
   const routePolylineCoords = useMemo(() => {
     if (!routePolylines || routePolylines.length === 0) return [];
 
-    return routePolylines.flatMap(route =>
-      route.steps.map(step => {
-        if (!step.polyline) return null;
-        const coords = decodePolyline(step.polyline);
-        return {
-          coords,
-          color: step.mode === 'WALKING' ? '#666666' : step.color || '#4A90E2',
-          isWalking: step.mode === 'WALKING',
-        };
-      }).filter(Boolean)
-    ).flat();
+    return routePolylines
+      .flatMap((route) =>
+        route.steps
+          .map((step) => {
+            if (!step.polyline) return null;
+            const coords = decodePolyline(step.polyline);
+            return {
+              coords,
+              color: step.mode === 'WALKING' ? '#666666' : step.color || '#4A90E2',
+              isWalking: step.mode === 'WALKING',
+            };
+          })
+          .filter(Boolean),
+      )
+      .flat();
   }, [routePolylines]);
 
   if (loadError) return <div>Map failed to load</div>;
   if (!isLoaded) return <div>Loading map...</div>;
+
+  const smoothHeading = getSmoothHeading(heading);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -272,7 +300,7 @@ export default function MapWrapper({
 
         {bookmarkLocations.length >= 2 && onAddStop && (
           <button
-            onClick={() => setAddStopMode(m => !m)}
+            onClick={() => setAddStopMode((m) => !m)}
             style={{
               padding: '10px 12px',
               borderRadius: '8px',
@@ -289,7 +317,10 @@ export default function MapWrapper({
 
         {bookmarkLocations.length > 0 && (
           <button
-            onClick={() => { onClearRoute?.(); setAddStopMode(false); }}
+            onClick={() => {
+              onClearRoute?.();
+              setAddStopMode(false);
+            }}
             style={{
               padding: '10px 12px',
               borderRadius: '8px',
@@ -303,13 +334,42 @@ export default function MapWrapper({
         )}
       </div>
 
+      <button
+        onClick={() => mapRef.current?.setHeading(0)}
+        style={{
+          position: 'absolute',
+          left: 16,
+          bottom: 16,
+          zIndex: 1000,
+          width: 48,
+          height: 48,
+          borderRadius: '50%',
+          border: '1px solid #ccc',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        }}
+      >
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          style={{
+            transform: `rotate(${-smoothHeading}deg)`,
+            transition: 'transform 150ms ease',
+          }}
+        >
+          <path d="M12 2 L16 12 L12 10 L8 12 Z" fill="#E53935" />
+          <path d="M12 22 L16 12 L12 14 L8 12 Z" fill="#666" />
+        </svg>
+      </button>
+
       <GoogleMap
         onLoad={onLoad}
         mapContainerStyle={{ width: '100%', height: '100%' }}
         center={center}
         zoom={zoom}
         options={{
-          styles: isDark ? mapStyle : undefined,
+          mapId: process.env.EXPO_PUBLIC_GOOGLE_MAPS_MAP_ID,
+          rotateControl: true,
         }}
       >
         {bookmarkLocations.map((loc, i) => (
@@ -321,39 +381,39 @@ export default function MapWrapper({
         ))}
 
         {/* Draw route polylines if available */}
-        {routePolylineCoords.length > 0 ? (
-          routePolylineCoords.map((pl, idx) => (
-            <Polyline
-              key={idx}
-              path={pl!.coords}
-              options={{
-                strokeColor: pl!.color,
-                strokeWeight: pl!.isWalking ? 2 : 5,
-                strokeOpacity: pl!.isWalking ? 0.6 : 1.0,
-                zIndex: pl!.isWalking ? 1 : 2,
-                icons: pl!.isWalking ? [
-                  {
-                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 2 },
-                    offset: '0',
-                    repeat: '10px',
-                  },
-                ] : undefined,
-              }}
-            />
-          ))
-        ) : (
-          // Fallback: direct line if no polylines
-          polylineCoords.length > 1 && (
-            <Polyline
-              path={polylineCoords}
-              options={{
-                strokeColor: '#4A90E2',
-                strokeWeight: 4,
-                strokeOpacity: 0.8,
-              }}
-            />
-          )
-        )}
+        {routePolylineCoords.length > 0
+          ? routePolylineCoords.map((pl, idx) => (
+              <Polyline
+                key={idx}
+                path={pl!.coords}
+                options={{
+                  strokeColor: pl!.color,
+                  strokeWeight: pl!.isWalking ? 2 : 5,
+                  strokeOpacity: pl!.isWalking ? 0.6 : 1.0,
+                  zIndex: pl!.isWalking ? 1 : 2,
+                  icons: pl!.isWalking
+                    ? [
+                        {
+                          icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 2 },
+                          offset: '0',
+                          repeat: '10px',
+                        },
+                      ]
+                    : undefined,
+                }}
+              />
+            ))
+          : // Fallback: direct line if no polylines
+            polylineCoords.length > 1 && (
+              <Polyline
+                path={polylineCoords}
+                options={{
+                  strokeColor: '#4A90E2',
+                  strokeWeight: 4,
+                  strokeOpacity: 0.8,
+                }}
+              />
+            )}
       </GoogleMap>
     </div>
   );
