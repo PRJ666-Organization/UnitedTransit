@@ -64,7 +64,7 @@ export default function SettingsScreen() {
               >
                 <Text
                   style={{
-                    color: preference === option ? '#fff' : theme.sub,
+                    color: preference === option ? theme.bg : theme.text,
                     fontWeight: '600',
                     fontSize: 13,
                     textTransform: 'capitalize',
