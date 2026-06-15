@@ -230,12 +230,14 @@ async function fetchSegmentRoutes(
     for (const pref of transitPrefs) {
       try {
         const modeParam = mode ? `&transit_mode=${mode}` : '';
+        // Request alternative routes to get more options
         const reqUrl = `https://maps.googleapis.com/maps/api/directions/json` +
           `?origin=${origin.lat},${origin.lng}` +
           `&destination=${destination.lat},${destination.lng}` +
           `&mode=transit` +
           `&departure_time=${departureTime}` +
-          `${modeParam}&transit_routing_preference=${pref}&key=${apiKey}`;
+          `${modeParam}&transit_routing_preference=${pref}` +
+          `&alternatives=true&key=${apiKey}`;
 
         const raw = await fetchGoogle(reqUrl);
         const parsed = JSON.parse(raw.toString());
@@ -265,7 +267,15 @@ async function fetchSegmentRoutes(
     }
   }
 
-  return allRawRoutes.map(route => ({
+  // Sort by duration and return top options
+  const sortedRoutes = allRawRoutes.sort((a, b) => {
+    const durA = a.legs?.[0]?.duration?.value || 999999;
+    const durB = b.legs?.[0]?.duration?.value || 999999;
+    return durA - durB;
+  });
+
+  // Return up to 5 unique route options
+  return sortedRoutes.slice(0, 5).map(route => ({
     summary: route.summary || '',
     legs: buildLegs(route),
   }));
@@ -449,7 +459,8 @@ router.get('/', async (req: Request, res: Response) => {
       `?origin=${oLat},${oLon}` +
       `&destination=${dLat},${dLon}` +
       `&mode=transit` +
-      `&departure_time=${departureTime}`;
+      `&departure_time=${departureTime}` +
+      `&alternatives=true`;
 
     // Query multiple transit modes to get comprehensive results
     const transitModes = ['bus', 'subway', 'train', 'tram', 'rail'];

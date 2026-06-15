@@ -575,6 +575,18 @@ export default function RouteInformation({
         </View>
       )}
 
+      {/* Route Options Header for Single-Stop Routes */}
+      {!loading && filteredRoutes.length > 0 && combinedRoute === null && (
+        <View style={styles.routeOptionsHeader}>
+          <ThemedText style={[styles.routeOptionsLabel, { color: colors.sub }]}>
+            {filteredRoutes.length} route option{filteredRoutes.length !== 1 ? 's' : ''} available
+          </ThemedText>
+          <ThemedText style={[styles.routeOptionsHint, { color: colors.sub }]}>
+            Tap to select a route
+          </ThemedText>
+        </View>
+      )}
+
       {filteredRoutes.map((route, routeIndex) => {
         const isSelected = selectedRouteIndex === routeIndex;
 
@@ -662,17 +674,17 @@ export default function RouteInformation({
                   </View>
 
                   {/* Segment Options Selector (for multi-stop routes) */}
-                  {routeSegments[legIndex] && routeSegments[legIndex].options.length > 1 && (
+                  {routeSegments[legIndex] && routeSegments[legIndex].options.length >= 1 && (
                     <View style={styles.segmentOptionsContainer}>
                       <ThemedText style={[styles.segmentOptionsLabel, { color: colors.sub }]}>
-                        Route options:
+                        {routeSegments[legIndex].options.length} route options:
                       </ThemedText>
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
                         style={styles.segmentOptionsScroll}
                       >
-                        {routeSegments[legIndex].options.map((option, optIdx) => {
+                        {routeSegments[legIndex].options.slice(0, 3).map((option, optIdx) => {
                           const selection = segmentSelections.find(s => s.segmentIndex === legIndex);
                           const isSelected = selection?.selectedOptionIndex === optIdx;
                           return (
@@ -923,6 +935,20 @@ const styles = StyleSheet.create({
   },
   closeText: {
     fontSize: 22,
+  },
+  // Route Options Header
+  routeOptionsHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  routeOptionsLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  routeOptionsHint: {
+    fontSize: 12,
+    marginTop: 2,
   },
   // Stops/Waypoints Section
   stopsSection: {
