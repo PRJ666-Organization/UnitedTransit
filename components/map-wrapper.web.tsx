@@ -8,7 +8,7 @@ import {
   useJsApiLoader,
   type Libraries,
 } from '@react-google-maps/api';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const LIBRARIES: Libraries = ['places'];
 
@@ -383,36 +383,57 @@ export default function MapWrapper({
         {/* Draw route polylines if available */}
         {routePolylineCoords.length > 0
           ? routePolylineCoords.map((pl, idx) => (
-              <Polyline
-                key={idx}
-                path={pl!.coords}
-                options={{
-                  strokeColor: pl!.color,
-                  strokeWeight: pl!.isWalking ? 2 : 5,
-                  strokeOpacity: pl!.isWalking ? 0.6 : 1.0,
-                  zIndex: pl!.isWalking ? 1 : 2,
-                  icons: pl!.isWalking
-                    ? [
-                        {
-                          icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 2 },
-                          offset: '0',
-                          repeat: '10px',
-                        },
-                      ]
-                    : undefined,
-                }}
-              />
+              <React.Fragment key={idx}>
+                {/* Outline layer rendered underneath */}
+                <Polyline
+                  path={pl!.coords}
+                  options={{
+                    strokeColor: '#000000',
+                    strokeWeight: pl!.isWalking ? 5 : 9,
+                    strokeOpacity: pl!.isWalking ? 0.9 : 0.8,
+                    zIndex: pl!.isWalking ? 1 : 2,
+                  }}
+                />
+                <Polyline
+                  path={pl!.coords}
+                  options={{
+                    strokeColor: pl!.color,
+                    strokeWeight: pl!.isWalking ? 4 : 7,
+                    strokeOpacity: pl!.isWalking ? 0.6 : 1.0,
+                    zIndex: pl!.isWalking ? 1 : 2,
+                    icons: pl!.isWalking
+                      ? [
+                          {
+                            icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 2 },
+                            offset: '0',
+                            repeat: '10px',
+                          },
+                        ]
+                      : undefined,
+                  }}
+                />
+              </React.Fragment>
             ))
           : // Fallback: direct line if no polylines
             polylineCoords.length > 1 && (
-              <Polyline
-                path={polylineCoords}
-                options={{
-                  strokeColor: '#4A90E2',
-                  strokeWeight: 4,
-                  strokeOpacity: 0.8,
-                }}
-              />
+              <React.Fragment>
+                <Polyline
+                  path={polylineCoords}
+                  options={{
+                    strokeColor: '#000000',
+                    strokeWeight: 7,
+                    strokeOpacity: 0.4,
+                  }}
+                />
+                <Polyline
+                  path={polylineCoords}
+                  options={{
+                    strokeColor: '#4A90E2',
+                    strokeWeight: 4,
+                    strokeOpacity: 0.8,
+                  }}
+                />
+              </React.Fragment>
             )}
       </GoogleMap>
     </div>
