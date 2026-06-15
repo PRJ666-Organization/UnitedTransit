@@ -1,9 +1,9 @@
-import { useRouter } from 'expo-router';
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemePreference, useThemeContext } from '@/constants/theme';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
@@ -13,8 +13,22 @@ export default function SettingsScreen() {
   const { preference, setPreference } = useThemeContext();
 
   const theme = isDark
-    ? { bg: '#151718', text: '#FFFFFF', sub: '#A0A4A8', accent: '#fff', cardBg: '#2a2d33', border: '#3d4148' }
-    : { bg: '#f5f5f5', text: '#000', sub: '#555555', accent: '#0a7ea4', cardBg: '#ffffff', border: '#d0d0d0' };
+    ? {
+        bg: '#151718',
+        text: '#FFFFFF',
+        sub: '#A0A4A8',
+        accent: '#fff',
+        cardBg: '#2a2d33',
+        border: '#3d4148',
+      }
+    : {
+        bg: '#f5f5f5',
+        text: '#000',
+        sub: '#555555',
+        accent: '#0a7ea4',
+        cardBg: '#ffffff',
+        border: '#d0d0d0',
+      };
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -38,7 +52,9 @@ export default function SettingsScreen() {
           >
             <View>
               <Text style={[styles.settingLabel, { color: theme.text }]}>Not signed in</Text>
-              <Text style={[styles.settingSub, { color: theme.sub }]}>Sign in to save bookmarks</Text>
+              <Text style={[styles.settingSub, { color: theme.sub }]}>
+                Sign in to save bookmarks
+              </Text>
             </View>
             <Text style={{ color: theme.accent, fontWeight: '600', fontSize: 15 }}>Sign In →</Text>
           </Pressable>
