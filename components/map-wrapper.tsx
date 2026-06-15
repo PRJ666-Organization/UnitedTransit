@@ -1,9 +1,10 @@
 import * as Location from 'expo-location';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region, Camera } from 'react-native-maps';
 import { BookmarkLocation, SearchHistoryItem } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { mapStyle } from '@/styles/map-style';
 
 type GeoResult = {
   formatted_address: string;
@@ -119,6 +120,8 @@ export default function MapWrapper({
   const [showResults, setShowResults] = useState(false);
   const [showRecentSearches, setShowRecentSearches] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [heading, setHeading] = useState(0);
+  const [is3DView, setIs3DView] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Theme colors
@@ -128,13 +131,16 @@ export default function MapWrapper({
         text: '#FFFFFF',
         sub: '#A0A4A8',
         border: '#3d4148',
+        accent: '#4a9eff',
       }
     : {
         card: '#ffffff',
         text: '#000',
         sub: '#666666',
         border: '#d0d0d0',
+        accent: '#0a7ea4',
       };
+  const colors = { accent: isDark ? '#4a9eff' : '#0a7ea4' };
 
   console.log('[MapWrapper] RENDER bookmarkLocations:', bookmarkLocations.length);
 
@@ -428,6 +434,33 @@ export default function MapWrapper({
         </View>
       )}
 
+      {/* Compass Button */}
+      <TouchableOpacity
+        style={[styles.compassButton, { backgroundColor: theme.card, borderColor: theme.border }]}
+        onPress={() => {
+          mapRef.current?.animateCamera({ heading: 0 }, { duration: 300 });
+          setHeading(0);
+        }}
+      >
+        <Text style={styles.compassIcon}>🧭</Text>
+      </TouchableOpacity>
+
+      {/* 3D View Toggle */}
+      <TouchableOpacity
+        style={[styles.viewToggleBtn, { backgroundColor: is3DView ? colors.accent : theme.card, borderColor: theme.border }]}
+        onPress={() => {
+          const new3D = !is3DView;
+          setIs3DView(new3D);
+          if (new3D) {
+            mapRef.current?.animateCamera({ pitch: 45 }, { duration: 300 });
+          } else {
+            mapRef.current?.animateCamera({ pitch: 0 }, { duration: 300 });
+          }
+        }}
+      >
+        <Text style={[styles.viewToggleText, { color: is3DView ? '#fff' : theme.text }]}>3D</Text>
+      </TouchableOpacity>
+
       <MapView
         ref={mapRef}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
@@ -435,6 +468,14 @@ export default function MapWrapper({
         region={initialRegion}
         showsUserLocation={true}
         showsMyLocationButton={false}
+        showsCompass={true}
+        userInterfaceStyle={isDark ? 'dark' : 'light'}
+        customMapStyle={isDark ? mapStyle : undefined}
+        onUserDirectionChange={(e) => {
+          if (e.nativeEvent.heading !== undefined) {
+            setHeading(e.nativeEvent.heading);
+          }
+        }}
       >
         {/* Markers with numbered labels and color coding */}
         {bookmarkLocations.map((loc, i) => {
@@ -638,6 +679,47 @@ const styles = StyleSheet.create({
   },
   markerLabel: {
     color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  compassButton: {
+    position: 'absolute',
+    right: 12,
+    bottom: 100,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 5,
+    zIndex: 10,
+  },
+  compassIcon: {
+    fontSize: 20,
+  },
+  viewToggleBtn: {
+    position: 'absolute',
+    right: 12,
+    bottom: 156,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 5,
+    zIndex: 10,
+  },
+  viewToggleText: {
     fontSize: 14,
     fontWeight: '700',
   },
