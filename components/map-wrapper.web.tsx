@@ -67,6 +67,7 @@ export default function MapWrapper({
   initialRegion,
   onClearRoute,
   onDestinationSelected,
+  onAlternateRoute,
   onAddStop,
   routePolylines,
   showSignIn,
@@ -81,6 +82,7 @@ export default function MapWrapper({
   };
   onClearRoute?: () => void;
   onDestinationSelected?: (origin: BookmarkLocation, destination: BookmarkLocation) => void;
+  onAlternateRoute?: (currentLocation: BookmarkLocation, destination: BookmarkLocation) => void;
   onAddStop?: (stop: BookmarkLocation) => void;
   routePolylines?: RoutePolyline[];
   showSignIn?: boolean;
@@ -98,6 +100,9 @@ export default function MapWrapper({
   const [home, setHome] = useState<{ lat: number; lng: number } | null>(null);
   const [addStopMode, setAddStopMode] = useState(false);
   const [heading, setHeading] = useState(0);
+
+  const [useAlternateRoute, setUseAlternateRoute] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const prevHeadingRef = useRef(0);
 
@@ -124,6 +129,27 @@ export default function MapWrapper({
         });
       });
     }
+  }, []);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setCurrentLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      },
+      (err) => console.warn(err),
+      {
+        enableHighAccuracy: true,
+        maximumAge: 10000,
+        timeout: 10000,
+      },
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
   useEffect(() => {
@@ -156,18 +182,45 @@ export default function MapWrapper({
       name: place.formatted_address || place.name || 'Selected Destination',
     };
 
+    // Add stop mode takes priority
     if (addStopMode && onAddStop) {
       onAddStop(destination);
       setAddStopMode(false);
-    } else if (home && onDestinationSelected) {
+      return;
+    }
+
+    // Alternate route (CURRENT LOCATION to destination)
+    if (useAlternateRoute) {
+      if (!currentLocation) return;
+
+      const currentLoc: BookmarkLocation = {
+        latitude: currentLocation.lat,
+        longitude: currentLocation.lng,
+        name: 'Current Location',
+      };
+
+      onAlternateRoute?.(currentLoc, destination);
+      return;
+    }
+
+    // Default route (HOME to destination)
+    if (home && onDestinationSelected) {
       const origin: BookmarkLocation = {
         latitude: home.lat,
         longitude: home.lng,
-        name: 'Current Location',
+        name: 'Home',
       };
-      onDestinationSelected(origin, destination);
-    } else if (mapRef.current) {
-      mapRef.current.panTo({ lat: destination.latitude, lng: destination.longitude });
+
+      onDestinationSelected?.(origin, destination);
+      return;
+    }
+
+    // Fallback
+    if (mapRef.current) {
+      mapRef.current.panTo({
+        lat: destination.latitude,
+        lng: destination.longitude,
+      });
       mapRef.current.setZoom(14);
     }
   };
@@ -332,6 +385,31 @@ export default function MapWrapper({
             Clear Route
           </button>
         )}
+
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 8px',
+            borderRadius: '8px',
+            border: '1px solid #ccc',
+            background: '#fff',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={useAlternateRoute}
+            onChange={(e) => setUseAlternateRoute(e.target.checked)}
+            style={{
+              accentColor: '#0a7ea4',
+            }}
+          />
+          Alt Route
+        </label>
       </div>
 
       <button

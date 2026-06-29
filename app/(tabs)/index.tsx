@@ -1,5 +1,5 @@
 import { BookmarkLocation, useAuth } from '@/hooks/use-auth';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Region } from 'react-native-maps';
@@ -14,10 +14,13 @@ type RoutePolyline = {
   }[];
 };
 
+type RouteMode = 'destination' | 'alternate';
+
 export default function HomeScreen() {
   const { activeBookmarkLocations, setActiveBookmarkLocations, user } = useAuth();
   const router = useRouter();
   const [displayLocations, setDisplayLocations] = useState<BookmarkLocation[]>([]);
+  const [routeMode, setRouteMode] = useState<RouteMode>('alternate');
   const [tripName, setTripName] = useState<string>('');
   const [allRoutePolylines, setAllRoutePolylines] = useState<RoutePolyline[]>([]);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState<number>(0);
@@ -74,11 +77,25 @@ export default function HomeScreen() {
   }, [displayLocations]);
 
   // Callback for when a destination is selected from the map search
-  const handleDestinationSelected = useCallback((origin: BookmarkLocation, destination: BookmarkLocation) => {
-    setDisplayLocations([origin, destination]);
-    setTripName('Route to Destination');
-    setSelectedRouteIndex(0);
-  }, []);
+  const handleDestinationSelected = useCallback(
+    (origin: BookmarkLocation, destination: BookmarkLocation) => {
+      setDisplayLocations([origin, destination]);
+      setTripName('Route to Destination');
+      setRouteMode('destination');
+      setSelectedRouteIndex(0);
+    },
+    [],
+  );
+
+  const handleAlternateRoute = useCallback(
+    (currentLocation: BookmarkLocation, destination: BookmarkLocation) => {
+      setDisplayLocations([currentLocation, destination]);
+      setTripName('Alternate Route');
+      setRouteMode('alternate');
+      setSelectedRouteIndex(0);
+    },
+    [],
+  );
 
   // Callback for when routes are loaded
   const handleRoutesLoaded = useCallback((polylines: RoutePolyline[]) => {
@@ -101,6 +118,7 @@ export default function HomeScreen() {
         initialRegion={region}
         onClearRoute={clearRoute}
         onDestinationSelected={handleDestinationSelected}
+        onAlternateRoute={handleAlternateRoute}
         routePolylines={selectedRoutePolyline}
         showSignIn={!user}
         onSignIn={() => router.push('/login')}

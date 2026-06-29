@@ -1,10 +1,18 @@
-import * as Location from 'expo-location';
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { BookmarkLocation } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { mapStyle } from '@/styles/map-style';
+import * as Location from 'expo-location';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 
 type GeoResult = {
   formatted_address: string;
@@ -88,6 +96,7 @@ export default function MapWrapper({
   initialRegion,
   onClearRoute,
   onDestinationSelected,
+  onAlternateRoute,
   routePolylines,
   showSignIn,
   onSignIn,
@@ -96,6 +105,7 @@ export default function MapWrapper({
   initialRegion: Region;
   onClearRoute?: () => void;
   onDestinationSelected?: (origin: BookmarkLocation, destination: BookmarkLocation) => void;
+  onAlternateRoute?: (currentLocation: BookmarkLocation, destination: BookmarkLocation) => void;
   routePolylines?: RoutePolyline[];
   showSignIn?: boolean;
   onSignIn?: () => void;
@@ -110,7 +120,10 @@ export default function MapWrapper({
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Theme colors
@@ -152,14 +165,14 @@ export default function MapWrapper({
   useEffect(() => {
     if (bookmarkLocations.length >= 2 && mapRef.current) {
       mapRef.current.fitToCoordinates(
-        bookmarkLocations.map(loc => ({
+        bookmarkLocations.map((loc) => ({
           latitude: loc.latitude,
           longitude: loc.longitude,
         })),
         {
           edgePadding: { top: 100, right: 50, bottom: 50, left: 50 },
           animated: true,
-        }
+        },
       );
     }
   }, [bookmarkLocations]);
@@ -194,52 +207,56 @@ export default function MapWrapper({
   }, []);
 
   // Handle selecting a search result
-  const handleSelectResult = useCallback((result: GeoResult) => {
-    const selected: BookmarkLocation = {
-      latitude: result.lat,
-      longitude: result.lng,
-      name: result.formatted_address,
-    };
+  const handleSelectResult = useCallback(
+    (result: GeoResult) => {
+      const selected: BookmarkLocation = {
+        latitude: result.lat,
+        longitude: result.lng,
+        name: result.formatted_address,
+      };
 
-    if (!currentLocation) {
-      setSearchError('Unable to get your current location. Please enable location services.');
-      return;
-    }
-    const origin: BookmarkLocation = {
-      latitude: currentLocation.latitude,
-      longitude: currentLocation.longitude,
-      name: 'Current Location',
-    };
-    onDestinationSelected?.(origin, selected);
+      if (!currentLocation) {
+        setSearchError('Unable to get your current location. Please enable location services.');
+        return;
+      }
+      const origin: BookmarkLocation = {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        name: 'Current Location',
+      };
+      onDestinationSelected?.(origin, selected);
 
-    setSearchQuery('');
-    setSearchResults([]);
-    setShowResults(false);
-  }, [currentLocation, onDestinationSelected]);
+      setSearchQuery('');
+      setSearchResults([]);
+      setShowResults(false);
+    },
+    [currentLocation, onDestinationSelected],
+  );
 
   // Build polylines for each step
-  const polylines = routePolylines?.flatMap((route, routeIdx) =>
-    route.steps.map((step, stepIdx) => {
-      if (!step.polyline) return null;
-      const coords = decodePolyline(step.polyline);
-      if (coords.length === 0) return null;
+  const polylines =
+    routePolylines?.flatMap((route, routeIdx) =>
+      route.steps
+        .map((step, stepIdx) => {
+          if (!step.polyline) return null;
+          const coords = decodePolyline(step.polyline);
+          if (coords.length === 0) return null;
 
-      const color = step.mode === 'WALKING'
-        ? '#888888'
-        : step.color || '#0a7ea4';
+          const color = step.mode === 'WALKING' ? '#888888' : step.color || '#0a7ea4';
 
-      return (
-        <Polyline
-          key={`${routeIdx}-${stepIdx}`}
-          coordinates={coords}
-          strokeColor={color}
-          strokeWidth={step.mode === 'WALKING' ? 3 : 5}
-          strokeOpacity={step.mode === 'WALKING' ? 0.6 : 1.0}
-          lineDashPattern={step.mode === 'WALKING' ? [6, 4] : undefined}
-        />
-      );
-    }).filter(Boolean)
-  ) || [];
+          return (
+            <Polyline
+              key={`${routeIdx}-${stepIdx}`}
+              coordinates={coords}
+              strokeColor={color}
+              strokeWidth={step.mode === 'WALKING' ? 3 : 5}
+              strokeOpacity={step.mode === 'WALKING' ? 0.6 : 1.0}
+              lineDashPattern={step.mode === 'WALKING' ? [6, 4] : undefined}
+            />
+          );
+        })
+        .filter(Boolean),
+    ) || [];
 
   return (
     <>
@@ -280,16 +297,19 @@ export default function MapWrapper({
 
       {/* Search Results Dropdown */}
       {showResults && (
-        <View style={[styles.resultsDropdown, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View
+          style={[
+            styles.resultsDropdown,
+            { backgroundColor: theme.card, borderColor: theme.border },
+          ]}
+        >
           {searchLoading && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color="#0a7ea4" />
               <Text style={[styles.loadingText, { color: theme.sub }]}>Searching...</Text>
             </View>
           )}
-          {searchError && (
-            <Text style={styles.errorText}>{searchError}</Text>
-          )}
+          {searchError && <Text style={styles.errorText}>{searchError}</Text>}
           {searchResults.map((result, i) => (
             <TouchableOpacity
               key={i}
@@ -329,11 +349,7 @@ export default function MapWrapper({
 
         {/* Fallback: direct line if no polylines */}
         {bookmarkLocations.length >= 2 && !routePolylines && (
-          <Polyline
-            coordinates={bookmarkLocations}
-            strokeColor="#0a7ea4"
-            strokeWidth={3}
-          />
+          <Polyline coordinates={bookmarkLocations} strokeColor="#0a7ea4" strokeWidth={3} />
         )}
       </MapView>
     </>
@@ -430,4 +446,3 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
-
