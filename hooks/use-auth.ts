@@ -11,6 +11,13 @@ export type BookmarkLocation = {
   latitude: number;
   longitude: number;
   name?: string;
+  stopDuration?: number; // minutes to stop at this location before resuming transit
+};
+
+export type SearchHistoryItem = {
+  search_id: number;
+  locations_json: string;
+  searched_at: string;
 };
 
 export type SearchHistoryItem = {

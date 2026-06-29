@@ -81,10 +81,10 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       }
     | undefined;
 
-//   if (!user || user.is_active === 0) {
-//     res.status(401).json({ error: 'Invalid credentials' });
-//     return;
-//   }
+  if (!user || user.is_active === 0) {
+    res.status(401).json({ error: 'Invalid credentials' });
+    return;
+  }
 
   if (!bcrypt.compareSync(pwd, user.password_hash)) {
     res.status(401).json({ error: 'Invalid credentials' });
