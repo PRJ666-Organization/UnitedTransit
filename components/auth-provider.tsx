@@ -165,59 +165,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchSearchHistory = useCallback(async (): Promise<SearchHistoryItem[]> => {
     try {
-      if (user?.token) {
-        // Authenticated user - fetch from server
-        const res = await fetch(`${API_URL}/search-history`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        });
-        if (!res.ok) return [];
-        return await res.json();
-      } else {
-        // Anonymous user - fetch from AsyncStorage
-        const stored = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
-        return stored ? JSON.parse(stored) : [];
-      }
+      // Always use local AsyncStorage for search history (works for all users)
+      const stored = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
+      return stored ? JSON.parse(stored) : [];
     } catch (e) {
       console.error('[SearchHistory] Fetch error', e);
       return [];
     }
-  }, [user?.token]);
+  }, []);
 
   const saveSearchHistory = useCallback(async (locations: BookmarkLocation[]): Promise<boolean> => {
     try {
-      if (user?.token) {
-        // Authenticated user - save to server
-        const res = await fetch(`${API_URL}/search-history`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${user.token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ locations }),
-        });
-        return res.ok;
-      } else {
-        // Anonymous user - save to AsyncStorage
-        const stored = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
-        const history: SearchHistoryItem[] = stored ? JSON.parse(stored) : [];
+      // Always save to local AsyncStorage (works for all users)
+      const stored = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
+      const history: SearchHistoryItem[] = stored ? JSON.parse(stored) : [];
 
-        // Add new entry at beginning
-        history.unshift({
-          search_id: Date.now(),
-          locations_json: JSON.stringify(locations),
-          searched_at: new Date().toISOString(),
-        });
+      // Add new entry at beginning
+      history.unshift({
+        search_id: Date.now(),
+        locations_json: JSON.stringify(locations),
+        searched_at: new Date().toISOString(),
+      });
 
-        // Keep only last 3
-        const trimmed = history.slice(0, 3);
-        await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(trimmed));
-        return true;
-      }
+      // Keep only last 5
+      const trimmed = history.slice(0, 5);
+      await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(trimmed));
+      return true;
     } catch (e) {
       console.error('[SearchHistory] Save error', e);
       return false;
     }
-  }, [user?.token]);
+  }, []);
 
   const getHomeAddress = useCallback(async (): Promise<{ homeAddress?: string; homeLat?: number; homeLng?: number }> => {
     try {

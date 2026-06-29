@@ -68,15 +68,17 @@ export default function HomeScreen() {
         const allVehicles = [];
 
         for (const route of transitRoutes) {
-          const res = await fetch(`http://localhost:3000/api/live/route/${route}`);
+          console.log('[LiveVehicles] Fetching vehicles for route:', route);
+          const res = await fetch(`${API_URL}/api/live/route/${route}`);
           const vehicles = await res.json();
+          console.log('[LiveVehicles] Received vehicles for route', route, ':', vehicles.length, 'vehicles');
           allVehicles.push(...vehicles);
         }
 
-        console.log('LIVE VEHICLES:', allVehicles);
+        console.log('[LiveVehicles] Total vehicles:', allVehicles.length);
         setLiveVehicles(allVehicles);
       } catch (err) {
-        console.error('Live vehicle fetch failed:', err);
+        console.error('[LiveVehicles] Fetch failed:', err);
       }
     };
 

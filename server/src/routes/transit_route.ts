@@ -154,6 +154,15 @@ function buildLegs(route: any): Leg[] {
         const agency = line.agencies?.[0] || {};
         const agencyName = agency.name || '';
 
+        // Debug log to see what Google API returns
+        console.log('[Transit Route] Transit line data:', JSON.stringify({
+          short_name: line.short_name,
+          name: line.name,
+          longName,
+          vehicleType,
+          agencyName
+        }));
+
         // Try to extract route number from longName if shortName is empty
         if (!shortName && longName) {
           const routeMatch = longName.match(/(?:Route\s+|Line\s+)?(\d+[A-Za-z]?)/i);
@@ -166,6 +175,14 @@ function buildLegs(route: any): Leg[] {
 
         if (!shortName && agencyName) {
           shortName = agencyName;
+        }
+
+        // Final fallback - try to extract from URL if available
+        if (!shortName && line.url) {
+          const urlMatch = line.url.match(/route[\/=](\d+[A-Za-z]?)/i);
+          if (urlMatch) {
+            shortName = urlMatch[1];
+          }
         }
 
         let instruction = '';
