@@ -79,43 +79,7 @@ type RouteOption = {
   legs: TransitLeg[];
 };
 
-type TransitFilter = 'all' | 'subway' | 'bus';
-
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-
-// Map transit types to categories - including all possible vehicle types from Google
-const SUBWAY_VEHICLE_TYPES = ['SUBWAY_TRAIN', 'METRO_RAIL', 'HEAVY_RAIL', 'COMMUTER_TRAIN', 'HIGH_SPEED_TRAIN', 'RAIL'];
-const BUS_VEHICLE_TYPES = ['BUS', 'TROLLEYBUS', 'TROLLEY_BUS'];
-
-// Check if a route contains a specific transit type based on vehicle type
-function routeHasVehicleType(leg: TransitLeg, vehicleTypes: string[]): boolean {
-  const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
-  // The icon in the data should match, but we also check vehicle type if available
-  return transitSteps.some(s => {
-    const icon = s.transitLine?.icon || '🚌';
-    // Check by icon
-    if (icon === '🚇' || icon === '🚆') return vehicleTypes === SUBWAY_VEHICLE_TYPES || vehicleTypes.some(t => SUBWAY_VEHICLE_TYPES.includes(t));
-    if (icon === '🚌' || icon === '⛴️') return vehicleTypes === BUS_VEHICLE_TYPES || vehicleTypes.some(t => BUS_VEHICLE_TYPES.includes(t));
-    return false;
-  });
-}
-
-function routeContainsSubway(leg: TransitLeg): boolean {
-  const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
-  // Check by icon (🚇 = subway, 🚆 = train/rail, 🚋 = tram)
-  return transitSteps.some(s => {
-    const icon = s.transitLine?.icon || '';
-    return icon === '🚇' || icon === '🚆';
-  });
-}
-
-function routeContainsBus(leg: TransitLeg): boolean {
-  const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
-  return transitSteps.some(s => {
-    const icon = s.transitLine?.icon || '';
-    return icon === '🚌' || icon === '⛴️';
-  });
-}
 
 export default function RouteInformation({
   locations,
@@ -140,7 +104,6 @@ export default function RouteInformation({
   const [routes, setRoutes] = useState<RouteOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [transitFilter, setTransitFilter] = useState<TransitFilter>('all');
   const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
   const [segmentSelections, setSegmentSelections] = useState<SegmentSelection[]>([]);
   const [timePickerSegment, setTimePickerSegment] = useState<number | null>(null);
@@ -249,8 +212,12 @@ export default function RouteInformation({
     const combinedLegs: TransitLeg[] = [];
     let totalDuration = 0;
 
-    for (const selection of segmentSelections) {
-      const segment = routeSegments[selection.segmentIndex];
+    // Iterate segments in order, not selections
+    for (let i = 0; i < routeSegments.length; i++) {
+      const selection = segmentSelections.find(s => s.segmentIndex === i);
+      if (!selection) continue;
+
+      const segment = routeSegments[i];
       if (!segment) continue;
       const option = segment.options[selection.selectedOptionIndex];
       if (!option) continue;
@@ -355,43 +322,12 @@ export default function RouteInformation({
     }
   }, [combinedRoute, routes, onRoutesLoaded]);
 
-  // Filter routes based on selected transit type
-  const filteredRoutes = useMemo(() => {
-    // For multi-stop, use the combined route
+  // Get routes to display (combined for multi-stop, regular for single)
+  const displayRoutes = useMemo(() => {
     if (combinedRoute) {
       return [combinedRoute];
     }
-
-    if (transitFilter === 'all') return routes;
-
-    return routes.filter(route => {
-      const leg = route.legs[0];
-      if (!leg) return false;
-
-      if (transitFilter === 'subway') {
-        return routeContainsSubway(leg);
-      } else if (transitFilter === 'bus') {
-        return routeContainsBus(leg);
-      }
-      return true;
-    });
-  }, [combinedRoute, routes, transitFilter]);
-
-  // Count routes by type
-  const routeCounts = useMemo(() => {
-    let subway = 0;
-    let bus = 0;
-
-    const routesToCount = combinedRoute ? [combinedRoute] : routes;
-    routesToCount.forEach(route => {
-      const leg = route.legs[0];
-      if (!leg) return;
-
-      if (routeContainsSubway(leg)) subway++;
-      if (routeContainsBus(leg)) bus++;
-    });
-
-    return { subway, bus };
+    return routes;
   }, [combinedRoute, routes]);
 
   // Get label for location - all numbered (1, 2, 3, etc.)
@@ -521,61 +457,19 @@ export default function RouteInformation({
         </View>
       )}
 
-      {/* Transit Type Filter */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterBtn, {
-            backgroundColor: transitFilter === 'all' ? colors.accent : isDark ? '#3a3d42' : '#e8e8e8',
-          }]}
-          onPress={() => setTransitFilter('all')}
-        >
-          <ThemedText style={[styles.filterText, { color: transitFilter === 'all' ? '#fff' : colors.text }]}>
-            All
-          </ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterBtn, {
-            backgroundColor: transitFilter === 'subway' ? colors.accent : isDark ? '#3a3d42' : '#e8e8e8',
-          }]}
-          onPress={() => setTransitFilter('subway')}
-        >
-          <ThemedText style={[styles.filterText, { color: transitFilter === 'subway' ? '#fff' : colors.text }]}>
-            🚇 Metro
-          </ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterBtn, {
-            backgroundColor: transitFilter === 'bus' ? colors.accent : isDark ? '#3a3d42' : '#e8e8e8',
-          }]}
-          onPress={() => setTransitFilter('bus')}
-        >
-          <ThemedText style={[styles.filterText, { color: transitFilter === 'bus' ? '#fff' : colors.text }]}>
-            🚌 Bus
-          </ThemedText>
-        </TouchableOpacity>
-      </View>
-
       {loading && (
         <View style={styles.loadingContainer}>
           <ThemedText style={[styles.loadingText, { color: colors.sub }]}>Finding transit routes...</ThemedText>
         </View>
       )}
 
-      {error && filteredRoutes.length === 0 && (
+      {error && displayRoutes.length === 0 && (
         <View style={styles.errorContainer}>
           <ThemedText style={[styles.errorText, { color: '#e74c3c' }]}>{error}</ThemedText>
         </View>
       )}
 
-      {!loading && filteredRoutes.length === 0 && routes.length > 0 && (
-        <View style={styles.errorContainer}>
-          <ThemedText style={[styles.errorText, { color: colors.sub }]}>
-            No {transitFilter === 'subway' ? 'metro/subway' : transitFilter === 'bus' ? 'bus' : ''} routes found for this trip.
-          </ThemedText>
-        </View>
-      )}
-
-      {filteredRoutes.map((route, routeIndex) => {
+      {displayRoutes.map((route, routeIndex) => {
         const isSelected = selectedRouteIndex === routeIndex;
 
         // Calculate total duration across all legs

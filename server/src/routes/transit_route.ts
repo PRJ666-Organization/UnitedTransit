@@ -277,7 +277,10 @@ function extractModes(legs: Leg[]): { types: string[]; icons: string } {
   const iconSet = new Set<string>();
   for (const leg of legs) {
     for (const step of leg.steps) {
-      if (step.mode === 'TRANSIT' && step.transitLine) {
+      if (step.mode === 'WALKING') {
+        typeSet.add('WALKING');
+        iconSet.add('🚶');
+      } else if (step.mode === 'TRANSIT' && step.transitLine) {
         const icon = step.transitLine.icon;
         iconSet.add(icon);
         // Map icon back to type
@@ -290,6 +293,34 @@ function extractModes(legs: Leg[]): { types: string[]; icons: string } {
     }
   }
   return { types: Array.from(typeSet), icons: Array.from(iconSet).join(' ') };
+}
+
+// Fetch walking-only directions for a segment
+async function fetchWalkingRoute(
+  origin: { lat: number; lng: number },
+  destination: { lat: number; lng: number },
+  apiKey: string
+): Promise<{ summary: string; legs: Leg[] } | null> {
+  try {
+    const reqUrl = `https://maps.googleapis.com/maps/api/directions/json` +
+      `?origin=${origin.lat},${origin.lng}` +
+      `&destination=${destination.lat},${destination.lng}` +
+      `&mode=walking&key=${apiKey}`;
+
+    const raw = await fetchGoogle(reqUrl);
+    const parsed = JSON.parse(raw.toString());
+
+    if (parsed.status === 'OK' && parsed.routes?.[0]) {
+      return {
+        summary: 'Walking',
+        legs: buildLegs(parsed.routes[0]),
+      };
+    }
+    return null;
+  } catch (err) {
+    console.error('[Transit Route] Walking route fetch failed:', err);
+    return null;
+  }
 }
 
 // Handle multi-stop routes by fetching each segment and returning all options
@@ -358,15 +389,14 @@ async function handleMultiStopRoute(
     const segOrigin = allPoints[i];
     const segDest = allPoints[i + 1];
 
-    // Sort by duration
-    segmentRoutes.sort((a, b) => {
-      const durA = parseInt(a.legs[0]?.duration || '999');
-      const durB = parseInt(b.legs[0]?.duration || '999');
-      return durA - durB;
-    });
+    // Fetch walking route for this segment
+    const walkingRoute = await fetchWalkingRoute(segOrigin, segDest, apiKey);
 
-    // Build options with metadata
-    const options: SegmentOption[] = segmentRoutes.slice(0, 5).map((route, optIndex) => {
+    // Build options array (transit + walking)
+    const options: SegmentOption[] = [];
+
+    // Add transit options
+    segmentRoutes.slice(0, 5).forEach((route, optIndex) => {
       const { types, icons } = extractModes(route.legs);
       // Calculate total duration from all legs
       const totalDuration = route.legs.reduce((acc, leg) => {
@@ -387,7 +417,7 @@ async function handleMultiStopRoute(
       }, 0);
       const distanceStr = totalDistance < 1000 ? `${Math.round(totalDistance)} m` : `${(totalDistance / 1000).toFixed(1)} km`;
 
-      return {
+      options.push({
         id: `${i}-${optIndex}`,
         summary: route.summary || `Option ${optIndex + 1}`,
         legs: route.legs,
@@ -395,7 +425,44 @@ async function handleMultiStopRoute(
         distance: distanceStr,
         modes: types,
         modeIcons: icons || '🚶',
-      };
+      });
+    });
+
+    // Add walking option (always available)
+    if (walkingRoute) {
+      const totalDuration = walkingRoute.legs.reduce((acc, leg) => {
+        const mins = parseInt(leg.duration) || 0;
+        return acc + mins;
+      }, 0);
+      const totalDistance = walkingRoute.legs.reduce((acc, leg) => {
+        const dist = leg.distance || '';
+        const match = dist.match(/([\d.]+)\s*(km|m)/i);
+        let meters = 0;
+        if (match) {
+          const val = parseFloat(match[1]);
+          const unit = match[2].toLowerCase();
+          meters = unit === 'km' ? val * 1000 : val;
+        }
+        return acc + meters;
+      }, 0);
+      const distanceStr = totalDistance < 1000 ? `${Math.round(totalDistance)} m` : `${(totalDistance / 1000).toFixed(1)} km`;
+
+      options.push({
+        id: `${i}-walking`,
+        summary: 'Walk',
+        legs: walkingRoute.legs,
+        duration: `${totalDuration} min`,
+        distance: distanceStr,
+        modes: ['WALKING'],
+        modeIcons: '🚶',
+      });
+    }
+
+    // Sort all options by duration (fastest first)
+    options.sort((a, b) => {
+      const durA = parseInt(a.duration) || 999;
+      const durB = parseInt(b.duration) || 999;
+      return durA - durB;
     });
 
     segments.push({
@@ -504,18 +571,26 @@ router.get('/', async (req: Request, res: Response) => {
       }
     }
 
-    if (allRawRoutes.length === 0) {
-      return res.status(404).json({ error: 'No transit routes found' });
+    // Also fetch walking route
+    const walkingRoute = await fetchWalkingRoute({ lat: oLat, lng: oLon }, { lat: dLat, lng: dLon }, apiKey);
+
+    if (allRawRoutes.length === 0 && !walkingRoute) {
+      return res.status(404).json({ error: 'No routes found' });
     }
 
-    console.log(`[Transit Route] Combined ${allRawRoutes.length} unique route(s)`);
+    console.log(`[Transit Route] Combined ${allRawRoutes.length} unique transit route(s)`);
 
     const allRoutes: { summary: string; legs: Leg[] }[] = allRawRoutes.map((route) => ({
       summary: route.summary || '',
       legs: buildLegs(route),
     }));
 
-    // Sort by duration
+    // Add walking route to options
+    if (walkingRoute) {
+      allRoutes.push(walkingRoute);
+    }
+
+    // Sort by duration (fastest first)
     allRoutes.sort((a, b) => {
       const durA = parseInt(a.legs[0]?.duration || '999');
       const durB = parseInt(b.legs[0]?.duration || '999');

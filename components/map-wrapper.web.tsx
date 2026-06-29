@@ -1,5 +1,5 @@
 import { mapStyle } from '@/styles/map-style';
-import { BookmarkLocation, SearchHistoryItem } from '@/hooks/use-auth';
+import { BookmarkLocation, SearchHistoryItem, useAuth } from '@/hooks/use-auth';
 import {
   Autocomplete,
   GoogleMap,
@@ -105,6 +105,7 @@ export default function MapWrapper({
   isAddingWaypoint?: boolean;
   onWaypointAdded?: (waypoint: BookmarkLocation) => void;
 }) {
+  const { user, getHomeAddress } = useAuth();
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
     libraries: ['places'],
@@ -116,17 +117,37 @@ export default function MapWrapper({
 
   const [home, setHome] = useState<{ lat: number; lng: number } | null>(null);
   const [showRecentSearches, setShowRecentSearches] = useState(false);
+  const homeLoadedRef = useRef(false);
 
+  // Load home address if user is signed in
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((position) => {
-        setHome({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
+    if (user) {
+      getHomeAddress().then((homeData) => {
+        if (homeData.homeLat && homeData.homeLng) {
+          setHome({
+            lat: homeData.homeLat,
+            lng: homeData.homeLng,
+          });
+          homeLoadedRef.current = true;
+        }
       });
     }
-  }, []);
+  }, [user, getHomeAddress]);
+
+  // Get current location as fallback (only if no saved home)
+  useEffect(() => {
+    if (!homeLoadedRef.current && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        // Only set current location if we haven't loaded a saved home
+        if (!homeLoadedRef.current) {
+          setHome({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        }
+      });
+    }
+  }, []); // Empty dependency - only run once on mount
 
   useEffect(() => {
     if (!window.google?.maps || bookmarkLocations.length < 2 || !mapRef.current) return;
@@ -378,7 +399,7 @@ export default function MapWrapper({
           )}
         </div>
 
-        {home && (
+        {home && user && (
           <button
             onClick={() => {
               mapRef.current?.panTo(home);

@@ -219,6 +219,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user?.token]);
 
+  const getHomeAddress = useCallback(async (): Promise<{ homeAddress?: string; homeLat?: number; homeLng?: number }> => {
+    try {
+      if (!user?.token) {
+        return {};
+      }
+      const res = await fetch(`${API_URL}/user/home`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      if (!res.ok) return {};
+      const data = await res.json();
+      return {
+        homeAddress: data.homeAddress,
+        homeLat: data.homeLat,
+        homeLng: data.homeLng,
+      };
+    } catch (e) {
+      console.error('[Home] Get error', e);
+      return {};
+    }
+  }, [user?.token]);
+
+  const setHomeAddress = useCallback(async (address: string, lat: number, lng: number): Promise<boolean> => {
+    try {
+      if (!user?.token) return false;
+      const res = await fetch(`${API_URL}/user/home`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ homeAddress: address, homeLat: lat, homeLng: lng }),
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('[Home] Set error', e);
+      return false;
+    }
+  }, [user?.token]);
+
+  const deleteHomeAddress = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!user?.token) return false;
+      const res = await fetch(`${API_URL}/user/home`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('[Home] Delete error', e);
+      return false;
+    }
+  }, [user?.token]);
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -236,6 +289,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       fetchSearchHistory,
       saveSearchHistory,
       getDeviceId,
+      getHomeAddress,
+      setHomeAddress,
+      deleteHomeAddress,
     }}>
       {children}
     </AuthContext.Provider>

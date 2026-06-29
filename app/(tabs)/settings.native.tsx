@@ -2,9 +2,8 @@ import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemePreference, useThemeContext } from '@/constants/theme';
 import { useRouter } from 'expo-router';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, TextInput, Alert } from 'react-native';
-import { Autocomplete, useJsApiLoader } from '@react-google-maps/api';
 
 export default function SettingsScreen() {
   const { user, logout, getHomeAddress, setHomeAddress, deleteHomeAddress } = useAuth();
@@ -17,13 +16,6 @@ export default function SettingsScreen() {
   const [homeLat, setHomeLat] = useState<number | null>(null);
   const [homeLng, setHomeLng] = useState<number | null>(null);
   const [isEditing, setIsEditing] = useState<boolean>(false);
-
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
-    libraries: ['places'],
-  });
-
-  const autocompleteRef = useRef<any>(null);
 
   const theme = isDark
     ? {
@@ -67,31 +59,36 @@ export default function SettingsScreen() {
       return;
     }
 
-    if (!homeLat || !homeLng) {
-      Alert.alert('Error', 'Please select an address from the suggestions');
-      return;
-    }
+    try {
+      // Use Google Maps Geocoding API to validate and get coordinates
+      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(homeAddress)}&key=${apiKey}`
+      );
+      const data = await response.json();
 
-    const success = await setHomeAddress(homeAddress, homeLat, homeLng);
-    if (success) {
-      setIsEditing(false);
-      Alert.alert('Success', 'Home address saved');
-    } else {
-      Alert.alert('Error', 'Failed to save home address');
-    }
-  };
+      if (data.status === 'OK' && data.results && data.results.length > 0) {
+        const result = data.results[0];
+        const lat = result.geometry.location.lat;
+        const lng = result.geometry.location.lng;
+        const formattedAddress = result.formatted_address;
 
-  const handlePlaceChanged = () => {
-    if (autocompleteRef.current) {
-      const place = autocompleteRef.current.getPlace();
-      if (place.geometry?.location) {
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        const address = place.formatted_address || place.name || '';
-        setHomeAddressState(address);
-        setHomeLat(lat);
-        setHomeLng(lng);
+        const success = await setHomeAddress(formattedAddress, lat, lng);
+        if (success) {
+          setHomeAddressState(formattedAddress);
+          setHomeLat(lat);
+          setHomeLng(lng);
+          setIsEditing(false);
+          Alert.alert('Success', 'Home address saved');
+        } else {
+          Alert.alert('Error', 'Failed to save home address');
+        }
+      } else {
+        Alert.alert('Error', 'Address not found. Please enter a valid address.');
       }
+    } catch (e) {
+      console.error('[Settings] Geocoding error:', e);
+      Alert.alert('Error', 'Failed to geocode address. Please try again.');
     }
   };
 
@@ -186,41 +183,13 @@ export default function SettingsScreen() {
                       ? 'Edit your home address'
                       : 'Set your home address for quick access'}
                   </Text>
-                  {isLoaded ? (
-                    <Autocomplete
-                      onLoad={(ref) => (autocompleteRef.current = ref)}
-                      onPlaceChanged={handlePlaceChanged}
-                      options={{
-                        componentRestrictions: { country: 'ca' },
-                        types: ['address'],
-                      }}
-                    >
-                      <input
-                        type="text"
-                        value={homeAddress}
-                        onChange={(e) => setHomeAddressState(e.target.value)}
-                        placeholder="Enter your home address"
-                        style={{
-                          width: '100%',
-                          marginTop: '12px',
-                          padding: '10px 12px',
-                          borderRadius: '8px',
-                          border: `1px solid ${theme.border}`,
-                          fontSize: '15px',
-                          backgroundColor: theme.cardBg,
-                          color: theme.text,
-                        }}
-                      />
-                    </Autocomplete>
-                  ) : (
-                    <TextInput
-                      style={[styles.input, { borderColor: theme.border, color: theme.text }]}
-                      value={homeAddress}
-                      onChangeText={setHomeAddressState}
-                      placeholder="Enter your home address"
-                      placeholderTextColor={theme.sub}
-                    />
-                  )}
+                  <TextInput
+                    style={[styles.input, { borderColor: theme.border, color: theme.text }]}
+                    value={homeAddress}
+                    onChangeText={setHomeAddressState}
+                    placeholder="Enter your home address"
+                    placeholderTextColor={theme.sub}
+                  />
                   <View style={styles.buttonRow}>
                     <Pressable
                       style={[styles.button, { backgroundColor: theme.accent }]}

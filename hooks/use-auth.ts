@@ -5,6 +5,9 @@ export type AuthUser = {
   email: string;
   isAdmin: boolean;
   token?: string;
+  homeAddress?: string;
+  homeLat?: number;
+  homeLng?: number;
 };
 
 export type BookmarkLocation = {
@@ -12,12 +15,6 @@ export type BookmarkLocation = {
   longitude: number;
   name?: string;
   stopDuration?: number; // minutes to stop at this location before resuming transit
-};
-
-export type SearchHistoryItem = {
-  search_id: number;
-  locations_json: string;
-  searched_at: string;
 };
 
 export type SearchHistoryItem = {
@@ -42,6 +39,9 @@ export type AuthContextType = {
   fetchSearchHistory: () => Promise<SearchHistoryItem[]>;
   saveSearchHistory: (locations: BookmarkLocation[]) => Promise<boolean>;
   getDeviceId: () => Promise<string>;
+  getHomeAddress: () => Promise<{ homeAddress?: string; homeLat?: number; homeLng?: number }>;
+  setHomeAddress: (address: string, lat: number, lng: number) => Promise<boolean>;
+  deleteHomeAddress: () => Promise<boolean>;
 };
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
