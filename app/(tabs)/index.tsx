@@ -1,10 +1,11 @@
 import { BookmarkLocation, useAuth } from '@/hooks/use-auth';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Region } from 'react-native-maps';
 import MapWrapper from '../../components/map-wrapper';
 import RouteInformation from '../../components/route-information';
+import { LiveVehicle } from '../../server/src/services/nvasService';
 
 type RoutePolyline = {
   steps: {
@@ -16,6 +17,8 @@ type RoutePolyline = {
 
 type RouteMode = 'destination' | 'alternate';
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+
 export default function HomeScreen() {
   const { activeBookmarkLocations, setActiveBookmarkLocations, user } = useAuth();
   const router = useRouter();
@@ -24,6 +27,9 @@ export default function HomeScreen() {
   const [tripName, setTripName] = useState<string>('');
   const [allRoutePolylines, setAllRoutePolylines] = useState<RoutePolyline[]>([]);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState<number>(0);
+  const [transitRoutes, setTransitRoutes] = useState<string[]>([]);
+  console.log('Transit routes:', transitRoutes);
+  const [liveVehicles, setLiveVehicles] = useState<LiveVehicle[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -36,6 +42,39 @@ export default function HomeScreen() {
       console.log('[HomeScreen focus] setDisplayLocations done');
     }, [activeBookmarkLocations]),
   );
+
+  useEffect(() => {
+    if (!transitRoutes.length) {
+      setLiveVehicles([]);
+      return;
+    }
+
+    const fetchLiveVehicles = async () => {
+      try {
+        const allVehicles = [];
+
+        for (const route of transitRoutes) {
+          const res = await fetch(`http://localhost:3000/api/live/route/${route}`);
+
+          const vehicles = await res.json();
+
+          allVehicles.push(...vehicles);
+        }
+
+        console.log('LIVE VEHICLES:', allVehicles);
+
+        setLiveVehicles(allVehicles);
+      } catch (err) {
+        console.error('Live vehicle fetch failed:', err);
+      }
+    };
+
+    fetchLiveVehicles();
+
+    const interval = setInterval(fetchLiveVehicles, 30000);
+
+    return () => clearInterval(interval);
+  }, [transitRoutes]);
 
   const clearRoute = useCallback(() => {
     setActiveBookmarkLocations([]);
@@ -120,6 +159,7 @@ export default function HomeScreen() {
         onDestinationSelected={handleDestinationSelected}
         onAlternateRoute={handleAlternateRoute}
         routePolylines={selectedRoutePolyline}
+        liveVehicles={liveVehicles}
         showSignIn={!user}
         onSignIn={() => router.push('/login')}
       />
@@ -129,6 +169,7 @@ export default function HomeScreen() {
         onClear={clearRoute}
         onRoutesLoaded={handleRoutesLoaded}
         onRouteSelected={setSelectedRouteIndex}
+        onTransitRoutesChanged={setTransitRoutes}
         selectedRouteIndex={selectedRouteIndex}
       />
     </View>

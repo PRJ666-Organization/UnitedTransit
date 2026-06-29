@@ -65,7 +65,13 @@ export async function getAllVehicles(): Promise<LiveVehicle[]> {
 export async function getVehiclesByRoute(routeId: string) {
   const vehicles = await getAllVehicles();
 
-  return vehicles.filter((v) => v.routeId === routeId);
+  const baseRoute = routeId.replace(/[A-Z]/g, '');
+
+  return vehicles.filter((v) => {
+    if (!v.routeId) return false;
+
+    return v.routeId === baseRoute;
+  });
 }
 
 export async function getVehiclesByTrip(tripId: string) {

@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import { LiveVehicle } from '../server/src/services/nvasService';
 
 type GeoResult = {
   formatted_address: string;
@@ -98,6 +99,7 @@ export default function MapWrapper({
   onDestinationSelected,
   onAlternateRoute,
   routePolylines,
+  liveVehicles = [],
   showSignIn,
   onSignIn,
 }: {
@@ -107,6 +109,7 @@ export default function MapWrapper({
   onDestinationSelected?: (origin: BookmarkLocation, destination: BookmarkLocation) => void;
   onAlternateRoute?: (currentLocation: BookmarkLocation, destination: BookmarkLocation) => void;
   routePolylines?: RoutePolyline[];
+  liveVehicles?: LiveVehicle[];
   showSignIn?: boolean;
   onSignIn?: () => void;
 }) {
@@ -258,6 +261,8 @@ export default function MapWrapper({
         .filter(Boolean),
     ) || [];
 
+  console.log('MAP RECEIVED VEHICLES:', liveVehicles);
+
   return (
     <>
       {/* Header Bar with Sign In and Search */}
@@ -341,6 +346,19 @@ export default function MapWrapper({
             key={`${loc.latitude}-${loc.longitude}-${i}`}
             coordinate={loc}
             title={loc.name ?? `Stop ${i + 1}`}
+          />
+        ))}
+
+        {liveVehicles.map((vehicle) => (
+          <Marker
+            key={`vehicle-${vehicle.vehicleId}`}
+            coordinate={{
+              latitude: vehicle.latitude,
+              longitude: vehicle.longitude,
+            }}
+            title={`Route ${vehicle.routeId ?? ''}`}
+            description={vehicle.speed ? `${Math.round(vehicle.speed)} km/h` : 'Live TTC vehicle'}
+            pinColor="#e31837"
           />
         ))}
 

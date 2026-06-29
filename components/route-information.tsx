@@ -12,6 +12,7 @@ export type RouteInformationProps = {
     polylines: { steps: { mode: 'WALKING' | 'TRANSIT'; polyline?: string; color?: string }[] }[],
   ) => void;
   onRouteSelected?: (routeIndex: number) => void;
+  onTransitRoutesChanged?: (routeIds: string[]) => void;
   selectedRouteIndex?: number;
 };
 
@@ -227,6 +228,7 @@ export default function RouteInformation({
   name,
   onClear,
   onRoutesLoaded,
+  onTransitRoutesChanged,
   onRouteSelected,
   selectedRouteIndex,
 }: RouteInformationProps) {
@@ -392,6 +394,22 @@ export default function RouteInformation({
       onRoutesLoaded(polylines);
     }
   }, [routes, onRoutesLoaded]);
+
+  useEffect(() => {
+    if (!onTransitRoutesChanged) return;
+
+    const routeNames = routes
+      .flatMap((route) =>
+        route.legs.flatMap((leg) =>
+          leg.steps
+            .filter((step) => step.mode === 'TRANSIT')
+            .map((step) => step.transitLine?.shortName),
+        ),
+      )
+      .filter(Boolean);
+
+    onTransitRoutesChanged([...new Set(routeNames)] as string[]);
+  }, [routes, onTransitRoutesChanged]);
 
   const filteredRoutes = useMemo(() => {
     if (transitFilter === 'all') return routes;

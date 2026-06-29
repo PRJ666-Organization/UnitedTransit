@@ -9,6 +9,7 @@ import {
   type Libraries,
 } from '@react-google-maps/api';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { LiveVehicle } from '../server/src/services/nvasService';
 
 const LIBRARIES: Libraries = ['places'];
 
@@ -70,6 +71,7 @@ export default function MapWrapper({
   onAlternateRoute,
   onAddStop,
   routePolylines,
+  liveVehicles = [],
   showSignIn,
   onSignIn,
 }: {
@@ -85,6 +87,7 @@ export default function MapWrapper({
   onAlternateRoute?: (currentLocation: BookmarkLocation, destination: BookmarkLocation) => void;
   onAddStop?: (stop: BookmarkLocation) => void;
   routePolylines?: RoutePolyline[];
+  liveVehicles?: LiveVehicle[];
   showSignIn?: boolean;
   onSignIn?: () => void;
 }) {
@@ -283,6 +286,8 @@ export default function MapWrapper({
 
   const smoothHeading = getSmoothHeading(heading);
 
+  console.log('WEB MAP RECEIVED VEHICLES:', liveVehicles);
+
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <div
@@ -455,6 +460,18 @@ export default function MapWrapper({
             key={i}
             position={{ lat: loc.latitude, lng: loc.longitude }}
             title={loc.name ?? `Stop ${i + 1}`}
+          />
+        ))}
+
+        {liveVehicles?.map((vehicle) => (
+          <Marker
+            key={vehicle.vehicleId}
+            position={{
+              lat: vehicle.latitude,
+              lng: vehicle.longitude,
+            }}
+            title={`TTC ${vehicle.routeId ?? ''}`}
+            label="🚌"
           />
         ))}
 
