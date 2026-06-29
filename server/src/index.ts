@@ -9,6 +9,7 @@ import bookmarkRoutes from './routes/bookmarks';
 import liveRoutes from './routes/live';
 import transitRoute from './routes/transit_route';
 import searchHistoryRoutes from './routes/search-history';
+import tripSessionRoutes from './routes/trip-session';
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const app = express();
@@ -26,6 +27,7 @@ app.use('/bookmarks', bookmarkRoutes);
 app.use('/transit-route', transitRoute);
 app.use('/api/live', liveRoutes);
 app.use('/search-history', searchHistoryRoutes);
+app.use('/api/trip-session', tripSessionRoutes);
 
 app.listen(PORT, async () => {
   await getDatabase();

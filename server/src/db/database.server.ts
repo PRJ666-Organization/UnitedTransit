@@ -73,6 +73,76 @@ export async function getDatabase(): Promise<Database.Database> {
     // Table already exists, ignore
   }
 
+  // Migration: create active_trip_session table for real-time tracking
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS active_trip_session (
+        session_id         INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        user_id            INTEGER,
+        device_id          TEXT,
+        trip_id            INTEGER,
+        status             TEXT NOT NULL DEFAULT 'active',
+        started_at         TEXT NOT NULL,
+        last_updated       TEXT NOT NULL,
+        current_segment    INTEGER DEFAULT 0,
+        current_stop_index INTEGER DEFAULT 0,
+        locations_json     TEXT,
+        selected_routes_json TEXT,
+        FOREIGN KEY (user_id) REFERENCES user(user_id) ON DELETE CASCADE,
+        FOREIGN KEY (trip_id) REFERENCES trip(trip_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_active_trip_user ON active_trip_session(user_id);
+      CREATE INDEX IF NOT EXISTS idx_active_trip_device ON active_trip_session(device_id);
+    `);
+  } catch {
+    // Table already exists, ignore
+  }
+
+  // Migration: create trip_location_update table for location tracking
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS trip_location_update (
+        update_id          INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        session_id         INTEGER NOT NULL,
+        latitude           REAL NOT NULL,
+        longitude          REAL NOT NULL,
+        accuracy           REAL,
+        timestamp          TEXT NOT NULL,
+        eta_minutes        REAL,
+        distance_to_next_stop REAL,
+        FOREIGN KEY (session_id) REFERENCES active_trip_session(session_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_trip_location_session ON trip_location_update(session_id);
+      CREATE INDEX IF NOT EXISTS idx_trip_location_time ON trip_location_update(timestamp);
+    `);
+  } catch {
+    // Table already exists, ignore
+  }
+
+  // Migration: create trip_delay_event table for delay detection
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS trip_delay_event (
+        event_id           INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        session_id         INTEGER NOT NULL,
+        event_type         TEXT NOT NULL,
+        severity           TEXT NOT NULL,
+        description        TEXT,
+        vehicle_id         TEXT,
+        route_affected     TEXT,
+        delay_minutes      INTEGER,
+        reroute_options_json TEXT,
+        created_at         TEXT NOT NULL,
+        resolved_at        TEXT,
+        FOREIGN KEY (session_id) REFERENCES active_trip_session(session_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_delay_event_session ON trip_delay_event(session_id);
+      CREATE INDEX IF NOT EXISTS idx_delay_event_time ON trip_delay_event(created_at);
+    `);
+  } catch {
+    // Table already exists, ignore
+  }
+
   console.log('Database initialized (server) at', DB_PATH);
   return db;
 }

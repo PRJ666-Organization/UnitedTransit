@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, TouchableOpacity, View, Platform } from 'react-native';
+import { Modal, ScrollView, StyleSheet, TouchableOpacity, View, Platform, ActivityIndicator } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { BookmarkLocation } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTrip } from '@/contexts/TripContext';
 
 export type DepartureTime = {
   sectionIndex: number;
@@ -79,43 +80,7 @@ type RouteOption = {
   legs: TransitLeg[];
 };
 
-type TransitFilter = 'all' | 'subway' | 'bus';
-
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-
-// Map transit types to categories - including all possible vehicle types from Google
-const SUBWAY_VEHICLE_TYPES = ['SUBWAY_TRAIN', 'METRO_RAIL', 'HEAVY_RAIL', 'COMMUTER_TRAIN', 'HIGH_SPEED_TRAIN', 'RAIL'];
-const BUS_VEHICLE_TYPES = ['BUS', 'TROLLEYBUS', 'TROLLEY_BUS'];
-
-// Check if a route contains a specific transit type based on vehicle type
-function routeHasVehicleType(leg: TransitLeg, vehicleTypes: string[]): boolean {
-  const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
-  // The icon in the data should match, but we also check vehicle type if available
-  return transitSteps.some(s => {
-    const icon = s.transitLine?.icon || '🚌';
-    // Check by icon
-    if (icon === '🚇' || icon === '🚆') return vehicleTypes === SUBWAY_VEHICLE_TYPES || vehicleTypes.some(t => SUBWAY_VEHICLE_TYPES.includes(t));
-    if (icon === '🚌' || icon === '⛴️') return vehicleTypes === BUS_VEHICLE_TYPES || vehicleTypes.some(t => BUS_VEHICLE_TYPES.includes(t));
-    return false;
-  });
-}
-
-function routeContainsSubway(leg: TransitLeg): boolean {
-  const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
-  // Check by icon (🚇 = subway, 🚆 = train/rail, 🚋 = tram)
-  return transitSteps.some(s => {
-    const icon = s.transitLine?.icon || '';
-    return icon === '🚇' || icon === '🚆';
-  });
-}
-
-function routeContainsBus(leg: TransitLeg): boolean {
-  const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
-  return transitSteps.some(s => {
-    const icon = s.transitLine?.icon || '';
-    return icon === '🚌' || icon === '⛴️';
-  });
-}
 
 export default function RouteInformation({
   locations,
@@ -137,10 +102,12 @@ export default function RouteInformation({
     ? { bg: '#151718', text: '#FFFFFF', sub: '#A0A4A8', border: '#3d4148', accent: '#4a9eff', cardBg: '#2a2d33', cardBorder: '#404450', danger: '#e74c3c', success: '#22c55e' }
     : { bg: '#ffffff', text: '#111', sub: '#555555', border: '#d0d0d0', accent: '#0a7ea4', cardBg: '#f8f9fa', cardBorder: '#dde0e4', danger: '#e74c3c', success: '#22c55e' };
 
+  const { status: tripStatus, startTrip } = useTrip();
+  const [startingTrip, setStartingTrip] = useState(false);
+
   const [routes, setRoutes] = useState<RouteOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [transitFilter, setTransitFilter] = useState<TransitFilter>('all');
   const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
   const [segmentSelections, setSegmentSelections] = useState<SegmentSelection[]>([]);
   const [timePickerSegment, setTimePickerSegment] = useState<number | null>(null);
@@ -249,7 +216,10 @@ export default function RouteInformation({
     const combinedLegs: TransitLeg[] = [];
     let totalDuration = 0;
 
-    for (const selection of segmentSelections) {
+    // Sort selections by segmentIndex to ensure correct order
+    const sortedSelections = [...segmentSelections].sort((a, b) => a.segmentIndex - b.segmentIndex);
+
+    for (const selection of sortedSelections) {
       const segment = routeSegments[selection.segmentIndex];
       if (!segment) continue;
       const option = segment.options[selection.selectedOptionIndex];
@@ -268,6 +238,30 @@ export default function RouteInformation({
     };
   }, [routeSegments, segmentSelections]);
 
+  // Create a mapping from leg index to segment index
+  // This assumes each segment contributes exactly one leg to combinedRoute
+  const legToSegmentMap = useMemo(() => {
+    const map: Record<number, number> = {};
+    let legIndex = 0;
+
+    const sortedSelections = [...segmentSelections].sort((a, b) => a.segmentIndex - b.segmentIndex);
+
+    for (const selection of sortedSelections) {
+      const segment = routeSegments[selection.segmentIndex];
+      if (!segment) continue;
+      const option = segment.options[selection.selectedOptionIndex];
+      if (!option) continue;
+
+      // Each option.legs array typically has one leg per segment
+      for (let i = 0; i < option.legs.length; i++) {
+        map[legIndex] = selection.segmentIndex;
+        legIndex++;
+      }
+    }
+
+    return map;
+  }, [routeSegments, segmentSelections]);
+
   // Handle segment option selection
   const handleSegmentOptionSelect = useCallback((segmentIndex: number, optionIndex: number) => {
     setSegmentSelections(prev => {
@@ -281,6 +275,34 @@ export default function RouteInformation({
     const match = duration.match(/(\d+)/);
     return match ? parseInt(match[1]) : 0;
   }, []);
+
+  // Handle starting the trip
+  const handleStartTrip = useCallback(async () => {
+    if (locations.length < 2) return;
+
+    setStartingTrip(true);
+    try {
+      // Build selected routes from segment selections
+      const selectedRoutes: Record<number, number> = {};
+      if (routeSegments.length > 0 && segmentSelections.length > 0) {
+        segmentSelections.forEach(selection => {
+          selectedRoutes[selection.segmentIndex] = selection.selectedOptionIndex;
+        });
+      } else if (selectedRouteIndex !== undefined) {
+        // Legacy single-route selection
+        selectedRoutes[0] = selectedRouteIndex;
+      }
+
+      const success = await startTrip(locations, selectedRoutes);
+      if (!success) {
+        console.error('[RouteInfo] Failed to start trip');
+      }
+    } catch (err) {
+      console.error('[RouteInfo] Start trip error:', err);
+    } finally {
+      setStartingTrip(false);
+    }
+  }, [locations, routeSegments, segmentSelections, selectedRouteIndex, startTrip]);
 
   // Handle departure time change with cascading to subsequent segments
   const handleDepartureTimeChangeWithCascade = useCallback((segmentIndex: number, time: string) => {
@@ -354,45 +376,6 @@ export default function RouteInformation({
       onRoutesLoaded(polylines);
     }
   }, [combinedRoute, routes, onRoutesLoaded]);
-
-  // Filter routes based on selected transit type
-  const filteredRoutes = useMemo(() => {
-    // For multi-stop, use the combined route
-    if (combinedRoute) {
-      return [combinedRoute];
-    }
-
-    if (transitFilter === 'all') return routes;
-
-    return routes.filter(route => {
-      const leg = route.legs[0];
-      if (!leg) return false;
-
-      if (transitFilter === 'subway') {
-        return routeContainsSubway(leg);
-      } else if (transitFilter === 'bus') {
-        return routeContainsBus(leg);
-      }
-      return true;
-    });
-  }, [combinedRoute, routes, transitFilter]);
-
-  // Count routes by type
-  const routeCounts = useMemo(() => {
-    let subway = 0;
-    let bus = 0;
-
-    const routesToCount = combinedRoute ? [combinedRoute] : routes;
-    routesToCount.forEach(route => {
-      const leg = route.legs[0];
-      if (!leg) return;
-
-      if (routeContainsSubway(leg)) subway++;
-      if (routeContainsBus(leg)) bus++;
-    });
-
-    return { subway, bus };
-  }, [combinedRoute, routes]);
 
   // Get label for location - all numbered (1, 2, 3, etc.)
   const getLocationLabel = (index: number): string => {
@@ -521,65 +504,31 @@ export default function RouteInformation({
         </View>
       )}
 
-      {/* Transit Type Filter */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterBtn, {
-            backgroundColor: transitFilter === 'all' ? colors.accent : isDark ? '#3a3d42' : '#e8e8e8',
-          }]}
-          onPress={() => setTransitFilter('all')}
-        >
-          <ThemedText style={[styles.filterText, { color: transitFilter === 'all' ? '#fff' : colors.text }]}>
-            All
-          </ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterBtn, {
-            backgroundColor: transitFilter === 'subway' ? colors.accent : isDark ? '#3a3d42' : '#e8e8e8',
-          }]}
-          onPress={() => setTransitFilter('subway')}
-        >
-          <ThemedText style={[styles.filterText, { color: transitFilter === 'subway' ? '#fff' : colors.text }]}>
-            🚇 Metro
-          </ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterBtn, {
-            backgroundColor: transitFilter === 'bus' ? colors.accent : isDark ? '#3a3d42' : '#e8e8e8',
-          }]}
-          onPress={() => setTransitFilter('bus')}
-        >
-          <ThemedText style={[styles.filterText, { color: transitFilter === 'bus' ? '#fff' : colors.text }]}>
-            🚌 Bus
-          </ThemedText>
-        </TouchableOpacity>
-      </View>
-
       {loading && (
         <View style={styles.loadingContainer}>
           <ThemedText style={[styles.loadingText, { color: colors.sub }]}>Finding transit routes...</ThemedText>
         </View>
       )}
 
-      {error && filteredRoutes.length === 0 && (
+      {error && (combinedRoute || routes).length === 0 && (
         <View style={styles.errorContainer}>
           <ThemedText style={[styles.errorText, { color: '#e74c3c' }]}>{error}</ThemedText>
         </View>
       )}
 
-      {!loading && filteredRoutes.length === 0 && routes.length > 0 && (
+      {!loading && (combinedRoute || routes).length === 0 && (
         <View style={styles.errorContainer}>
           <ThemedText style={[styles.errorText, { color: colors.sub }]}>
-            No {transitFilter === 'subway' ? 'metro/subway' : transitFilter === 'bus' ? 'bus' : ''} routes found for this trip.
+            No routes found for this trip.
           </ThemedText>
         </View>
       )}
 
       {/* Route Options Header for Single-Stop Routes */}
-      {!loading && filteredRoutes.length > 0 && combinedRoute === null && (
+      {!loading && routes.length > 0 && combinedRoute === null && (
         <View style={styles.routeOptionsHeader}>
           <ThemedText style={[styles.routeOptionsLabel, { color: colors.sub }]}>
-            {filteredRoutes.length} route option{filteredRoutes.length !== 1 ? 's' : ''} available
+            {routes.length} route option{routes.length !== 1 ? 's' : ''} available
           </ThemedText>
           <ThemedText style={[styles.routeOptionsHint, { color: colors.sub }]}>
             Tap to select a route
@@ -587,7 +536,20 @@ export default function RouteInformation({
         </View>
       )}
 
-      {filteredRoutes.map((route, routeIndex) => {
+      {/* Route Options Header for Multi-Stop Routes */}
+      {!loading && combinedRoute && routeSegments.length > 0 && (
+        <View style={styles.routeOptionsHeader}>
+          <ThemedText style={[styles.routeOptionsLabel, { color: colors.sub }]}>
+            {routeSegments.length} stop{routeSegments.length !== 1 ? 's' : ''} • Route configured
+          </ThemedText>
+          <ThemedText style={[styles.routeOptionsHint, { color: colors.sub }]}>
+            Select route options for each segment below
+          </ThemedText>
+        </View>
+      )}
+
+      {/* Single-Stop Route Cards */}
+      {routes.map((route, routeIndex) => {
         const isSelected = selectedRouteIndex === routeIndex;
 
         // Calculate total duration across all legs
@@ -677,14 +639,14 @@ export default function RouteInformation({
                   {routeSegments[legIndex] && routeSegments[legIndex].options.length >= 1 && (
                     <View style={styles.segmentOptionsContainer}>
                       <ThemedText style={[styles.segmentOptionsLabel, { color: colors.sub }]}>
-                        {routeSegments[legIndex].options.length} route options:
+                        {routeSegments[legIndex].options.length} route option{routeSegments[legIndex].options.length !== 1 ? 's' : ''} available:
                       </ThemedText>
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
                         style={styles.segmentOptionsScroll}
                       >
-                        {routeSegments[legIndex].options.slice(0, 3).map((option, optIdx) => {
+                        {routeSegments[legIndex].options.map((option, optIdx) => {
                           const selection = segmentSelections.find(s => s.segmentIndex === legIndex);
                           const isSelected = selection?.selectedOptionIndex === optIdx;
                           return (
@@ -718,6 +680,9 @@ export default function RouteInformation({
                           );
                         })}
                       </ScrollView>
+                      <ThemedText style={[styles.segmentOptionsHint, { color: colors.sub }]}>
+                        Tap to select your preferred route
+                      </ThemedText>
                     </View>
                   )}
 
@@ -896,6 +861,210 @@ export default function RouteInformation({
           </TouchableOpacity>
         );
       })}
+
+      {/* Multi-Stop Route Display (Combined Route) */}
+      {combinedRoute && routeSegments.length > 0 && (
+        <View style={[styles.routeCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder, borderWidth: 1 }]}>
+          <View style={[styles.routeHeader, { borderBottomColor: colors.border }]}>
+            <View style={styles.routeTitleRow}>
+              <ThemedText style={[styles.routeModes, { color: colors.text }]}>
+                {locations.length} stops
+              </ThemedText>
+              <ThemedText type="defaultSemiBold" style={[styles.routeSummary, { color: colors.text }]}>
+                {combinedRoute.summary}
+              </ThemedText>
+            </View>
+            <View style={styles.routeTimeRow}>
+              <ThemedText type="defaultSemiBold" style={[styles.routeDuration, { color: colors.accent }]}>
+                {combinedRoute.legs.reduce((acc, leg) => {
+                  const mins = parseInt(leg.duration) || 0;
+                  return acc + mins;
+                }, 0)} min total
+              </ThemedText>
+            </View>
+          </View>
+
+          {/* Render each leg/section of the multi-stop trip */}
+          {combinedRoute.legs.map((leg, legIndex) => {
+            const segmentIndex = legToSegmentMap[legIndex] ?? legIndex;
+            const sectionStart = legIndex + 1;
+            const sectionEnd = legIndex + 2;
+            const sectionTitle = `Section ${sectionStart} → ${sectionEnd}`;
+            const transitSteps = leg.steps.filter(s => s.mode === 'TRANSIT');
+
+            return (
+              <View key={legIndex} style={styles.sectionContainer}>
+                {/* Section Header */}
+                <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
+                  <View style={[styles.sectionNumberBadge, { backgroundColor: colors.accent }]}>
+                    <ThemedText style={styles.sectionNumberText}>{sectionStart}→{sectionEnd}</ThemedText>
+                  </View>
+                  <View style={styles.sectionInfo}>
+                    <ThemedText style={[styles.sectionTitle, { color: colors.text }]}>{sectionTitle}</ThemedText>
+                    <ThemedText style={[styles.sectionMeta, { color: colors.sub }]}>
+                      {leg.duration}
+                      {leg.distance && ` • ${leg.distance}`}
+                      {transitSteps.length > 0 && ` • ${transitSteps.length} transit line${transitSteps.length > 1 ? 's' : ''}`}
+                    </ThemedText>
+                  </View>
+                </View>
+
+                {/* Segment Options Selector */}
+                {routeSegments[segmentIndex] && routeSegments[segmentIndex].options.length >= 1 && (
+                  <View style={styles.segmentOptionsContainer}>
+                    <ThemedText style={[styles.segmentOptionsLabel, { color: colors.sub }]}>
+                      {routeSegments[segmentIndex].options.length} route option{routeSegments[segmentIndex].options.length !== 1 ? 's' : ''} available:
+                    </ThemedText>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.segmentOptionsScroll}
+                    >
+                      {routeSegments[segmentIndex].options.map((option, optIdx) => {
+                        const selection = segmentSelections.find(s => s.segmentIndex === segmentIndex);
+                        const isSelected = selection?.selectedOptionIndex === optIdx;
+                        return (
+                          <TouchableOpacity
+                            key={option.id}
+                            style={[
+                              styles.segmentOptionBtn,
+                              {
+                                backgroundColor: isSelected ? colors.accent : 'transparent',
+                                borderColor: colors.accent,
+                              }
+                            ]}
+                            onPress={() => handleSegmentOptionSelect(segmentIndex, optIdx)}
+                          >
+                            <ThemedText style={styles.segmentOptionIcon}>{option.modeIcons}</ThemedText>
+                            <ThemedText style={[
+                              styles.segmentOptionDuration,
+                              { color: isSelected ? '#fff' : colors.text }
+                            ]}>
+                              {option.duration}
+                            </ThemedText>
+                            {option.summary && (
+                              <ThemedText style={[
+                                styles.segmentOptionSummary,
+                                { color: isSelected ? 'rgba(255,255,255,0.8)' : colors.sub }
+                              ]} numberOfLines={1}>
+                                {option.summary}
+                              </ThemedText>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                    <ThemedText style={[styles.segmentOptionsHint, { color: colors.sub }]}>
+                      Tap to select your preferred route
+                    </ThemedText>
+                  </View>
+                )}
+
+                {/* Section Steps */}
+                {leg.steps.map((step, stepIndex) => (
+                  <View key={stepIndex} style={styles.stepRow}>
+                    <View style={styles.stepLeft}>
+                      <View style={styles.iconContainer}>
+                        <ThemedText style={styles.stepIcon}>
+                          {step.mode === 'WALKING' ? '🚶' : step.transitLine?.icon || '🚌'}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.stepContent}>
+                        <View style={styles.stepHeader}>
+                          <ThemedText style={[styles.stepTitle, { color: colors.text }]}>
+                            {step.instruction}
+                          </ThemedText>
+                        </View>
+
+                        {step.transitLine && (
+                          <View style={styles.transitInfo}>
+                            <View style={[styles.lineBadge, { backgroundColor: step.transitLine.color }]}>
+                              <ThemedText style={styles.lineName}>{step.transitLine.shortName}</ThemedText>
+                            </View>
+                            {step.numStops !== undefined && (
+                              <ThemedText style={[styles.stopsText, { color: colors.sub }]}>
+                                {step.numStops} stop{step.numStops !== 1 ? 's' : ''}
+                              </ThemedText>
+                            )}
+                          </View>
+                        )}
+
+                        {step.mode === 'TRANSIT' && step.departureTime && (
+                          <View style={styles.departureInfo}>
+                            <ThemedText style={[styles.departureText, { color: colors.accent, fontWeight: '600' }]}>
+                              Depart: {step.departureTime}
+                            </ThemedText>
+                            {step.arrivalTime && (
+                              <ThemedText style={[styles.departureText, { color: colors.sub }]}>
+                                Arrive: {step.arrivalTime}
+                              </ThemedText>
+                            )}
+                          </View>
+                        )}
+
+                        {step.from && step.to && (
+                          <View style={styles.stopInfoBlock}>
+                            <ThemedText style={[styles.stopTextInfo, { color: colors.sub }]}>
+                              From: {step.from}
+                            </ThemedText>
+                            <ThemedText style={[styles.stopTextInfo, { color: colors.sub }]}>
+                              To: {step.to}
+                            </ThemedText>
+                          </View>
+                        )}
+
+                        <View style={styles.stepDetails}>
+                          {step.duration && (
+                            <ThemedText style={[styles.stepMeta, { color: colors.sub }]}>
+                              {step.duration}
+                            </ThemedText>
+                          )}
+                          {step.distance && (
+                            <ThemedText style={[styles.stepMeta, { color: colors.sub }]}>
+                              {step.distance}
+                            </ThemedText>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Start Trip Button */}
+      {!loading && (routes.length > 0 || combinedRoute) && locations.length >= 2 && (
+        <View style={styles.startTripContainer}>
+          <TouchableOpacity
+            style={[
+              styles.startTripBtn,
+              {
+                backgroundColor: tripStatus === 'active' ? colors.success : colors.accent,
+                opacity: startingTrip || tripStatus === 'active' ? 0.7 : 1
+              }
+            ]}
+            onPress={handleStartTrip}
+            disabled={startingTrip || tripStatus === 'active' || locations.length < 2}
+            activeOpacity={0.8}
+          >
+            {startingTrip ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <ThemedText style={styles.startTripBtnText}>
+                {tripStatus === 'active' ? '✓ Trip Active' : '🚀 Start Trip'}
+              </ThemedText>
+            )}
+          </TouchableOpacity>
+          {tripStatus === 'idle' && locations.length >= 2 && (
+            <ThemedText style={[styles.startTripHint, { color: colors.sub }]}>
+              Start tracking your trip in real-time
+            </ThemedText>
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -917,6 +1086,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
     maxHeight: '100%',
+    zIndex: 10,
   },
   header: {
     flexDirection: 'row',
@@ -1074,22 +1244,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
   },
-  // Filter
-  filterContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  filterBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: '#e0e0e0',
-  },
-  filterText: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
   // Route Card
   routeCard: {
     borderRadius: 12,
@@ -1196,6 +1350,11 @@ const styles = StyleSheet.create({
   segmentOptionSummary: {
     fontSize: 10,
     maxWidth: 100,
+  },
+  segmentOptionsHint: {
+    fontSize: 11,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   // Departure time selector
   departureTimeRow: {
@@ -1360,5 +1519,33 @@ const styles = StyleSheet.create({
   stepMeta: {
     fontSize: 13,
     lineHeight: 16,
+  },
+  // Start Trip Button
+  startTripContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+  },
+  startTripBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  startTripBtnText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  startTripHint: {
+    textAlign: 'center',
+    fontSize: 13,
+    marginTop: 8,
   },
 });

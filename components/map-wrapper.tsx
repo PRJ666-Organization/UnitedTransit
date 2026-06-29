@@ -697,7 +697,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3,
     elevation: 5,
-    zIndex: 10,
+    zIndex: 1,
   },
   compassIcon: {
     fontSize: 20,
@@ -717,7 +717,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3,
     elevation: 5,
-    zIndex: 10,
+    zIndex: 1,
   },
   viewToggleText: {
     fontSize: 14,

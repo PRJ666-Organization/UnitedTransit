@@ -6,9 +6,11 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider } from '@/components/auth-provider';
+import { useAuth } from '@/hooks/use-auth';
 import { ThemeProvider } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getDatabase } from '../server/src/db/database';
+import { TripProvider } from '@/contexts/TripContext';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -56,13 +58,34 @@ function AppShell() {
   return (
     <AuthProvider>
       <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="login" options={{ presentation: 'modal', title: 'Account' }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        </Stack>
-        <StatusBar style="auto" />
+        <TripProviderWrapper>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="login" options={{ presentation: 'modal', title: 'Account' }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+          </Stack>
+          <StatusBar style="auto" />
+        </TripProviderWrapper>
       </NavThemeProvider>
     </AuthProvider>
+  );
+}
+
+// Wrapper component to pass auth context to TripProvider
+function TripProviderWrapper({ children }: { children: React.ReactNode }) {
+  const { user, getDeviceId } = useAuth();
+  const [deviceId, setDeviceId] = useState<string | undefined>();
+
+  useEffect(() => {
+    // Get device ID for anonymous users
+    if (!user) {
+      getDeviceId().then(id => setDeviceId(id));
+    }
+  }, [user, getDeviceId]);
+
+  return (
+    <TripProvider userId={user?.userId} deviceId={deviceId}>
+      {children}
+    </TripProvider>
   );
 }
