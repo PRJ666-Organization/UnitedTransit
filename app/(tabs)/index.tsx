@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { Region } from 'react-native-maps';
 import MapWrapper from '../../components/map-wrapper';
 import RouteInformation, { DepartureTime } from '../../components/route-information';
+import { LiveVehicle } from '../../server/src/services/nvasService';
 
 type RoutePolyline = {
   steps: {
@@ -13,6 +14,10 @@ type RoutePolyline = {
     color?: string;
   }[];
 };
+
+type RouteMode = 'destination' | 'alternate';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
 export default function HomeScreen() {
   const {
@@ -24,12 +29,15 @@ export default function HomeScreen() {
   } = useAuth();
   const router = useRouter();
   const [displayLocations, setDisplayLocations] = useState<BookmarkLocation[]>([]);
+  const [routeMode, setRouteMode] = useState<RouteMode>('alternate');
   const [tripName, setTripName] = useState<string>('');
   const [allRoutePolylines, setAllRoutePolylines] = useState<RoutePolyline[]>([]);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState<number>(0);
   const [recentSearches, setRecentSearches] = useState<SearchHistoryItem[]>([]);
   const [isAddingWaypoint, setIsAddingWaypoint] = useState(false);
   const [departureTimes, setDepartureTimes] = useState<DepartureTime[]>([]);
+  const [transitRoutes, setTransitRoutes] = useState<string[]>([]);
+  const [liveVehicles, setLiveVehicles] = useState<LiveVehicle[]>([]);
 
   // Load recent searches on mount and when user changes
   useEffect(() => {
@@ -48,6 +56,35 @@ export default function HomeScreen() {
     }, [activeBookmarkLocations]),
   );
 
+  // Fetch live vehicles when transit routes change
+  useEffect(() => {
+    if (!transitRoutes.length) {
+      setLiveVehicles([]);
+      return;
+    }
+
+    const fetchLiveVehicles = async () => {
+      try {
+        const allVehicles = [];
+
+        for (const route of transitRoutes) {
+          const res = await fetch(`http://localhost:3000/api/live/route/${route}`);
+          const vehicles = await res.json();
+          allVehicles.push(...vehicles);
+        }
+
+        console.log('LIVE VEHICLES:', allVehicles);
+        setLiveVehicles(allVehicles);
+      } catch (err) {
+        console.error('Live vehicle fetch failed:', err);
+      }
+    };
+
+    fetchLiveVehicles();
+    const interval = setInterval(fetchLiveVehicles, 30000);
+    return () => clearInterval(interval);
+  }, [transitRoutes]);
+
   const clearRoute = useCallback(() => {
     setActiveBookmarkLocations([]);
     setTripName('');
@@ -56,6 +93,8 @@ export default function HomeScreen() {
     setSelectedRouteIndex(0);
     setIsAddingWaypoint(false);
     setDepartureTimes([]);
+    setTransitRoutes([]);
+    setLiveVehicles([]);
   }, [setActiveBookmarkLocations]);
 
   const region = useMemo((): Region => {
@@ -102,6 +141,16 @@ export default function HomeScreen() {
     const updated = await fetchSearchHistory();
     setRecentSearches(updated);
   }, [saveSearchHistory, fetchSearchHistory]);
+
+  const handleAlternateRoute = useCallback(
+    (currentLocation: BookmarkLocation, destination: BookmarkLocation) => {
+      setDisplayLocations([currentLocation, destination]);
+      setTripName('Alternate Route');
+      setRouteMode('alternate');
+      setSelectedRouteIndex(0);
+    },
+    [],
+  );
 
   // Callback for when routes are loaded
   const handleRoutesLoaded = useCallback((polylines: RoutePolyline[]) => {
@@ -196,7 +245,9 @@ export default function HomeScreen() {
         initialRegion={region}
         onClearRoute={clearRoute}
         onDestinationSelected={handleDestinationSelected}
+        onAlternateRoute={handleAlternateRoute}
         routePolylines={selectedRoutePolyline}
+        liveVehicles={liveVehicles}
         showSignIn={!user}
         onSignIn={() => router.push('/login')}
         recentSearches={recentSearches}
@@ -210,6 +261,7 @@ export default function HomeScreen() {
         onClear={clearRoute}
         onRoutesLoaded={handleRoutesLoaded}
         onRouteSelected={setSelectedRouteIndex}
+        onTransitRoutesChanged={setTransitRoutes}
         selectedRouteIndex={selectedRouteIndex}
         onAddWaypoint={handleAddWaypoint}
         onRemoveWaypoint={handleRemoveWaypoint}

@@ -8,6 +8,7 @@ import {
   useJsApiLoader,
 } from '@react-google-maps/api';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { LiveVehicle } from '../server/src/services/nvasService';
 
 type RoutePolyline = {
   steps: {
@@ -80,7 +81,9 @@ export default function MapWrapper({
   initialRegion,
   onClearRoute,
   onDestinationSelected,
+  onAlternateRoute,
   routePolylines,
+  liveVehicles = [],
   showSignIn,
   onSignIn,
   recentSearches,
@@ -97,7 +100,9 @@ export default function MapWrapper({
   };
   onClearRoute?: () => void;
   onDestinationSelected?: (origin: BookmarkLocation, destination: BookmarkLocation) => void;
+  onAlternateRoute?: (currentLocation: BookmarkLocation, destination: BookmarkLocation) => void;
   routePolylines?: RoutePolyline[];
+  liveVehicles?: LiveVehicle[];
   showSignIn?: boolean;
   onSignIn?: () => void;
   recentSearches?: SearchHistoryItem[];
@@ -258,6 +263,8 @@ export default function MapWrapper({
 
   if (loadError) return <div>Map failed to load</div>;
   if (!isLoaded) return <div>Loading map...</div>;
+
+  console.log('WEB MAP RECEIVED VEHICLES:', liveVehicles);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -494,6 +501,18 @@ export default function MapWrapper({
             />
           );
         })}
+
+        {liveVehicles?.map((vehicle) => (
+          <Marker
+            key={vehicle.vehicleId}
+            position={{
+              lat: vehicle.latitude,
+              lng: vehicle.longitude,
+            }}
+            title={`TTC ${vehicle.routeId ?? ''}`}
+            label="🚌"
+          />
+        ))}
 
         {/* Draw route polylines if available */}
         {routePolylineCoords.length > 0 ? (

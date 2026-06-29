@@ -37,6 +37,7 @@ export type RouteInformationProps = {
   onClear: () => void;
   onRoutesLoaded?: (polylines: { steps: { mode: 'WALKING' | 'TRANSIT'; polyline?: string; color?: string }[] }[]) => void;
   onRouteSelected?: (routeIndex: number) => void;
+  onTransitRoutesChanged?: (routeIds: string[]) => void;
   selectedRouteIndex?: number;
   onAddWaypoint?: () => void;
   onRemoveWaypoint?: (index: number) => void;
@@ -86,6 +87,7 @@ export default function RouteInformation({
   name,
   onClear,
   onRoutesLoaded,
+  onTransitRoutesChanged,
   onRouteSelected,
   selectedRouteIndex,
   onAddWaypoint,
@@ -329,6 +331,23 @@ export default function RouteInformation({
     }
     return routes;
   }, [combinedRoute, routes]);
+
+  // Notify parent of transit routes for live vehicle tracking
+  useEffect(() => {
+    if (!onTransitRoutesChanged) return;
+
+    const routeNames = routes
+      .flatMap((route) =>
+        route.legs.flatMap((leg) =>
+          leg.steps
+            .filter((step) => step.mode === 'TRANSIT')
+            .map((step) => step.transitLine?.shortName),
+        ),
+      )
+      .filter(Boolean);
+
+    onTransitRoutesChanged([...new Set(routeNames)] as string[]);
+  }, [routes, onTransitRoutesChanged]);
 
   // Get label for location - all numbered (1, 2, 3, etc.)
   const getLocationLabel = (index: number): string => {

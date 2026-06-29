@@ -4,6 +4,8 @@ import { ActivityIndicator, Platform, StyleSheet, Text, TextInput, TouchableOpac
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { BookmarkLocation, SearchHistoryItem } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { mapStyle } from '@/styles/map-style';
+import { LiveVehicle } from '../server/src/services/nvasService';
 
 type GeoResult = {
   formatted_address: string;
@@ -87,7 +89,9 @@ export default function MapWrapper({
   initialRegion,
   onClearRoute,
   onDestinationSelected,
+  onAlternateRoute,
   routePolylines,
+  liveVehicles = [],
   showSignIn,
   onSignIn,
   recentSearches,
@@ -99,7 +103,9 @@ export default function MapWrapper({
   initialRegion: Region;
   onClearRoute?: () => void;
   onDestinationSelected?: (origin: BookmarkLocation, destination: BookmarkLocation) => void;
+  onAlternateRoute?: (currentLocation: BookmarkLocation, destination: BookmarkLocation) => void;
   routePolylines?: RoutePolyline[];
+  liveVehicles?: LiveVehicle[];
   showSignIn?: boolean;
   onSignIn?: () => void;
   recentSearches?: SearchHistoryItem[];
@@ -160,14 +166,14 @@ export default function MapWrapper({
   useEffect(() => {
     if (bookmarkLocations.length >= 2 && mapRef.current) {
       mapRef.current.fitToCoordinates(
-        bookmarkLocations.map(loc => ({
+        bookmarkLocations.map((loc) => ({
           latitude: loc.latitude,
           longitude: loc.longitude,
         })),
         {
           edgePadding: { top: 100, right: 50, bottom: 50, left: 50 },
           animated: true,
-        }
+        },
       );
     }
   }, [bookmarkLocations]);
@@ -279,27 +285,32 @@ export default function MapWrapper({
   }, [onSelectRecentSearch]);
 
   // Build polylines for each step
-  const polylines = routePolylines?.flatMap((route, routeIdx) =>
-    route.steps.map((step, stepIdx) => {
-      if (!step.polyline) return null;
-      const coords = decodePolyline(step.polyline);
-      if (coords.length === 0) return null;
+  const polylines =
+    routePolylines?.flatMap((route, routeIdx) =>
+      route.steps
+        .map((step, stepIdx) => {
+          if (!step.polyline) return null;
+          const coords = decodePolyline(step.polyline);
+          if (coords.length === 0) return null;
 
-      const color = step.mode === 'WALKING'
-        ? '#666666'
-        : step.color || '#0a7ea4';
+          const color = step.mode === 'WALKING'
+            ? '#666666'
+            : step.color || '#0a7ea4';
 
-      return (
-        <Polyline
-          key={`${routeIdx}-${stepIdx}`}
-          coordinates={coords}
-          strokeColor={color}
-          strokeWidth={step.mode === 'WALKING' ? 3 : 5}
-          lineDashPattern={step.mode === 'WALKING' ? [5, 5] : undefined}
-        />
-      );
-    }).filter(Boolean)
-  ) || [];
+          return (
+            <Polyline
+              key={`${routeIdx}-${stepIdx}`}
+              coordinates={coords}
+              strokeColor={color}
+              strokeWidth={step.mode === 'WALKING' ? 3 : 5}
+              lineDashPattern={step.mode === 'WALKING' ? [5, 5] : undefined}
+            />
+          );
+        })
+        .filter(Boolean),
+    ) || [];
+
+  console.log('MAP RECEIVED VEHICLES:', liveVehicles);
 
   return (
     <>
@@ -346,16 +357,19 @@ export default function MapWrapper({
 
       {/* Search Results Dropdown */}
       {showResults && (
-        <View style={[styles.resultsDropdown, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View
+          style={[
+            styles.resultsDropdown,
+            { backgroundColor: theme.card, borderColor: theme.border },
+          ]}
+        >
           {searchLoading && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color="#0a7ea4" />
               <Text style={[styles.loadingText, { color: theme.sub }]}>Searching...</Text>
             </View>
           )}
-          {searchError && (
-            <Text style={styles.errorText}>{searchError}</Text>
-          )}
+          {searchError && <Text style={styles.errorText}>{searchError}</Text>}
           {searchResults.map((result, i) => (
             <TouchableOpacity
               key={i}
@@ -435,6 +449,7 @@ export default function MapWrapper({
         region={initialRegion}
         showsUserLocation={true}
         showsMyLocationButton={false}
+        customMapStyle={isDark ? mapStyle : []}
       >
         {/* Markers with numbered labels and color coding */}
         {bookmarkLocations.map((loc, i) => {
@@ -457,16 +472,25 @@ export default function MapWrapper({
           );
         })}
 
+        {liveVehicles.map((vehicle) => (
+          <Marker
+            key={`vehicle-${vehicle.vehicleId}`}
+            coordinate={{
+              latitude: vehicle.latitude,
+              longitude: vehicle.longitude,
+            }}
+            title={`Route ${vehicle.routeId ?? ''}`}
+            description={vehicle.speed ? `${Math.round(vehicle.speed)} km/h` : 'Live TTC vehicle'}
+            pinColor="#e31837"
+          />
+        ))}
+
         {/* Draw route polylines */}
         {polylines}
 
         {/* Fallback: direct line connecting all stops in order */}
         {bookmarkLocations.length >= 2 && !routePolylines && (
-          <Polyline
-            coordinates={bookmarkLocations}
-            strokeColor="#0a7ea4"
-            strokeWidth={3}
-          />
+          <Polyline coordinates={bookmarkLocations} strokeColor="#0a7ea4" strokeWidth={3} />
         )}
       </MapView>
     </>
