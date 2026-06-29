@@ -336,7 +336,10 @@ export default function RouteInformation({
   useEffect(() => {
     if (!onTransitRoutesChanged) return;
 
-    const routeNames = routes
+    // For multi-stop routes, use combinedRoute; for single routes, use routes
+    const routesToCheck = combinedRoute ? [combinedRoute] : routes;
+
+    const routeNames = routesToCheck
       .flatMap((route) =>
         route.legs.flatMap((leg) =>
           leg.steps
@@ -347,7 +350,7 @@ export default function RouteInformation({
       .filter(Boolean);
 
     onTransitRoutesChanged([...new Set(routeNames)] as string[]);
-  }, [routes, onTransitRoutesChanged]);
+  }, [combinedRoute, routes, onTransitRoutesChanged]);
 
   // Get label for location - all numbered (1, 2, 3, etc.)
   const getLocationLabel = (index: number): string => {
