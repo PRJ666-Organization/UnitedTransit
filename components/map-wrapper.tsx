@@ -5,7 +5,19 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native
 import { BookmarkLocation, SearchHistoryItem } from '@/hooks/use-auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { mapStyle } from '@/styles/map-style';
-import { LiveVehicle } from '../server/src/services/nvasService';
+
+export type LiveVehicleWithColor = {
+  vehicleId: string;
+  routeId?: string;
+  tripId?: string;
+  stopId?: string;
+  latitude: number;
+  longitude: number;
+  bearing?: number;
+  speed?: number;
+  hasAssignment: boolean;
+  segmentColor?: string;
+};
 
 type GeoResult = {
   formatted_address: string;
@@ -105,7 +117,7 @@ export default function MapWrapper({
   onDestinationSelected?: (origin: BookmarkLocation, destination: BookmarkLocation) => void;
   onAlternateRoute?: (currentLocation: BookmarkLocation, destination: BookmarkLocation) => void;
   routePolylines?: RoutePolyline[];
-  liveVehicles?: LiveVehicle[];
+  liveVehicles?: LiveVehicleWithColor[];
   showSignIn?: boolean;
   onSignIn?: () => void;
   recentSearches?: SearchHistoryItem[];
@@ -481,8 +493,11 @@ export default function MapWrapper({
             }}
             title={`Route ${vehicle.routeId ?? ''}`}
             description={vehicle.speed ? `${Math.round(vehicle.speed)} km/h` : 'Live TTC vehicle'}
-            pinColor="#e31837"
-          />
+          >
+            <View style={[styles.vehicleMarker, { backgroundColor: vehicle.segmentColor || '#e31837' }]}>
+              <Text style={styles.vehicleIcon}>🚌</Text>
+            </View>
+          </Marker>
         ))}
 
         {/* Draw route polylines */}
@@ -664,5 +679,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  vehicleMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  vehicleIcon: {
+    fontSize: 16,
   },
 });

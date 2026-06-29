@@ -3,9 +3,20 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Region } from 'react-native-maps';
-import MapWrapper from '../../components/map-wrapper';
-import RouteInformation, { DepartureTime } from '../../components/route-information';
-import { LiveVehicle } from '../../server/src/services/nvasService';
+import MapWrapper, { LiveVehicleWithColor } from '../../components/map-wrapper';
+import RouteInformation, { DepartureTime, TransitRouteInfo } from '../../components/route-information';
+
+type LiveVehicle = {
+  vehicleId: string;
+  routeId?: string;
+  tripId?: string;
+  stopId?: string;
+  latitude: number;
+  longitude: number;
+  bearing?: number;
+  speed?: number;
+  hasAssignment: boolean;
+};
 
 type RoutePolyline = {
   steps: {
@@ -16,6 +27,27 @@ type RoutePolyline = {
 };
 
 type RouteMode = 'destination' | 'alternate';
+
+// Calculate distance between two points in meters using Haversine formula
+function getDistanceMeters(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const R = 6371000; // Earth's radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -36,8 +68,8 @@ export default function HomeScreen() {
   const [recentSearches, setRecentSearches] = useState<SearchHistoryItem[]>([]);
   const [isAddingWaypoint, setIsAddingWaypoint] = useState(false);
   const [departureTimes, setDepartureTimes] = useState<DepartureTime[]>([]);
-  const [transitRoutes, setTransitRoutes] = useState<string[]>([]);
-  const [liveVehicles, setLiveVehicles] = useState<LiveVehicle[]>([]);
+  const [transitRoutes, setTransitRoutes] = useState<TransitRouteInfo[]>([]);
+  const [liveVehicles, setLiveVehicles] = useState<LiveVehicleWithColor[]>([]);
 
   // Load recent searches on mount and when user changes
   useEffect(() => {
@@ -58,25 +90,96 @@ export default function HomeScreen() {
 
   // Fetch live vehicles when transit routes change
   useEffect(() => {
-    if (!transitRoutes.length) {
+    if (!transitRoutes.length || !displayLocations.length) {
       setLiveVehicles([]);
       return;
     }
 
     const fetchLiveVehicles = async () => {
       try {
-        const allVehicles = [];
+        const allVehicles: LiveVehicleWithColor[] = [];
+        const routeColorMap = new Map<string, string>();
 
-        for (const route of transitRoutes) {
-          console.log('[LiveVehicles] Fetching vehicles for route:', route);
-          const res = await fetch(`${API_URL}/api/live/route/${route}`);
+        // Build a map of route name to color
+        transitRoutes.forEach((route) => {
+          routeColorMap.set(route.routeName, route.color);
+        });
+
+        // Fetch vehicles for each unique route
+        const uniqueRouteNames = [...new Set(transitRoutes.map(r => r.routeName))];
+
+        for (const routeName of uniqueRouteNames) {
+          console.log('[LiveVehicles] Fetching vehicles for route:', routeName);
+          const res = await fetch(`${API_URL}/api/live/route/${routeName}`);
           const vehicles = await res.json();
-          console.log('[LiveVehicles] Received vehicles for route', route, ':', vehicles.length, 'vehicles');
-          allVehicles.push(...vehicles);
+          console.log('[LiveVehicles] Received vehicles for route', routeName, ':', vehicles.length, 'vehicles');
+
+          // Add color from route info
+          const color = routeColorMap.get(routeName);
+          vehicles.forEach((v: LiveVehicle) => {
+            allVehicles.push({ ...v, segmentColor: color });
+          });
         }
 
-        console.log('[LiveVehicles] Total vehicles:', allVehicles.length);
-        setLiveVehicles(allVehicles);
+        // Filter vehicles to only show those near stops (within 500m)
+        const PROXIMITY_THRESHOLD_METERS = 500;
+        const nearbyVehicles = allVehicles.filter((vehicle) => {
+          // Check if vehicle is near any stop in the route
+          for (const stop of displayLocations) {
+            const distance = getDistanceMeters(
+              vehicle.latitude,
+              vehicle.longitude,
+              stop.latitude,
+              stop.longitude
+            );
+            if (distance <= PROXIMITY_THRESHOLD_METERS) {
+              return true;
+            }
+          }
+          return false;
+        });
+
+        let relevantVehicles: LiveVehicleWithColor[];
+
+        if (nearbyVehicles.length > 0) {
+          // Show vehicles within proximity
+          relevantVehicles = nearbyVehicles;
+        } else {
+          // No vehicles nearby - find the closest vehicle to each stop
+          const closestVehicles = new Map<string, LiveVehicleWithColor & { distance: number }>();
+
+          for (const stop of displayLocations) {
+            let closestVehicle: (LiveVehicleWithColor & { distance: number }) | null = null;
+
+            for (const vehicle of allVehicles) {
+              const distance = getDistanceMeters(
+                vehicle.latitude,
+                vehicle.longitude,
+                stop.latitude,
+                stop.longitude
+              );
+
+              if (!closestVehicle || distance < closestVehicle.distance) {
+                closestVehicle = { ...vehicle, distance };
+              }
+            }
+
+            // Track closest vehicle per route to avoid duplicates
+            if (closestVehicle) {
+              const routeKey = closestVehicle.routeId || closestVehicle.vehicleId;
+              const existing = closestVehicles.get(routeKey);
+              if (!existing || closestVehicle.distance < existing.distance) {
+                closestVehicles.set(routeKey, closestVehicle);
+              }
+            }
+          }
+
+          // Return unique closest vehicles (remove distance property)
+          relevantVehicles = Array.from(closestVehicles.values()).map(({ distance, ...v }) => v);
+        }
+
+        console.log('[LiveVehicles] Total vehicles:', allVehicles.length, 'Relevant:', relevantVehicles.length);
+        setLiveVehicles(relevantVehicles);
       } catch (err) {
         console.error('[LiveVehicles] Fetch failed:', err);
       }
@@ -85,7 +188,7 @@ export default function HomeScreen() {
     fetchLiveVehicles();
     const interval = setInterval(fetchLiveVehicles, 30000);
     return () => clearInterval(interval);
-  }, [transitRoutes]);
+  }, [transitRoutes, displayLocations]);
 
   const clearRoute = useCallback(() => {
     setActiveBookmarkLocations([]);

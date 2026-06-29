@@ -8,7 +8,19 @@ import {
   useJsApiLoader,
 } from '@react-google-maps/api';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { LiveVehicle } from '../server/src/services/nvasService';
+
+export type LiveVehicleWithColor = {
+  vehicleId: string;
+  routeId?: string;
+  tripId?: string;
+  stopId?: string;
+  latitude: number;
+  longitude: number;
+  bearing?: number;
+  speed?: number;
+  hasAssignment: boolean;
+  segmentColor?: string;
+};
 
 type RoutePolyline = {
   steps: {
@@ -102,7 +114,7 @@ export default function MapWrapper({
   onDestinationSelected?: (origin: BookmarkLocation, destination: BookmarkLocation) => void;
   onAlternateRoute?: (currentLocation: BookmarkLocation, destination: BookmarkLocation) => void;
   routePolylines?: RoutePolyline[];
-  liveVehicles?: LiveVehicle[];
+  liveVehicles?: LiveVehicleWithColor[];
   showSignIn?: boolean;
   onSignIn?: () => void;
   recentSearches?: SearchHistoryItem[];
@@ -509,8 +521,20 @@ export default function MapWrapper({
               lat: vehicle.latitude,
               lng: vehicle.longitude,
             }}
-            title={`TTC ${vehicle.routeId ?? ''}`}
-            label="🚌"
+            title={`Route ${vehicle.routeId ?? ''}${vehicle.speed ? ` - ${Math.round(vehicle.speed)} km/h` : ''}`}
+            label={{
+              text: '🚌',
+              color: '#000',
+              fontSize: '14px',
+            }}
+            icon={{
+              path: 'M 0,-12 A 12,12 0 1,1 0,12 A 12,12 0 1,1 0,-12',
+              fillColor: vehicle.segmentColor || '#e31837',
+              fillOpacity: 1,
+              strokeColor: '#fff',
+              strokeWeight: 2,
+              scale: 1,
+            }}
           />
         ))}
 

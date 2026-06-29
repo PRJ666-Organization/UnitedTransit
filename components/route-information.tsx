@@ -9,6 +9,12 @@ export type DepartureTime = {
   time: string; // ISO string or 'now'
 };
 
+export type TransitRouteInfo = {
+  routeName: string;
+  segmentIndex: number;
+  color: string;
+};
+
 export type SegmentOption = {
   id: string;
   summary: string;
@@ -37,7 +43,7 @@ export type RouteInformationProps = {
   onClear: () => void;
   onRoutesLoaded?: (polylines: { steps: { mode: 'WALKING' | 'TRANSIT'; polyline?: string; color?: string }[] }[]) => void;
   onRouteSelected?: (routeIndex: number) => void;
-  onTransitRoutesChanged?: (routeIds: string[]) => void;
+  onTransitRoutesChanged?: (routes: TransitRouteInfo[]) => void;
   selectedRouteIndex?: number;
   onAddWaypoint?: () => void;
   onRemoveWaypoint?: (index: number) => void;
@@ -336,20 +342,41 @@ export default function RouteInformation({
   useEffect(() => {
     if (!onTransitRoutesChanged) return;
 
-    // For multi-stop routes, use combinedRoute; for single routes, use routes
-    const routesToCheck = combinedRoute ? [combinedRoute] : routes;
+    // Segment colors for multi-stop trips
+    const segmentColors = ['#e74c3c', '#3498db', '#27ae60', '#9b59b6', '#f39c12', '#1abc9c'];
+    const transitRoutes: TransitRouteInfo[] = [];
 
-    const routeNames = routesToCheck
-      .flatMap((route) =>
-        route.legs.flatMap((leg) =>
+    // For multi-stop routes, extract routes from combinedRoute with segment info
+    if (combinedRoute) {
+      combinedRoute.legs.forEach((leg, legIndex) => {
+        leg.steps
+          .filter((step) => step.mode === 'TRANSIT' && step.transitLine?.shortName)
+          .forEach((step) => {
+            transitRoutes.push({
+              routeName: step.transitLine!.shortName,
+              segmentIndex: legIndex,
+              color: step.transitLine!.color || segmentColors[legIndex % segmentColors.length],
+            });
+          });
+      });
+    } else {
+      // For single routes, use the route color
+      routes.forEach((route) => {
+        route.legs.forEach((leg, legIndex) => {
           leg.steps
-            .filter((step) => step.mode === 'TRANSIT')
-            .map((step) => step.transitLine?.shortName),
-        ),
-      )
-      .filter(Boolean);
+            .filter((step) => step.mode === 'TRANSIT' && step.transitLine?.shortName)
+            .forEach((step) => {
+              transitRoutes.push({
+                routeName: step.transitLine!.shortName,
+                segmentIndex: legIndex,
+                color: step.transitLine!.color || '#e74c3c',
+              });
+            });
+        });
+      });
+    }
 
-    onTransitRoutesChanged([...new Set(routeNames)] as string[]);
+    onTransitRoutesChanged(transitRoutes);
   }, [combinedRoute, routes, onTransitRoutesChanged]);
 
   // Get label for location - all numbered (1, 2, 3, etc.)

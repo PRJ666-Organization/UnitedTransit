@@ -1,0 +1,159 @@
+
+> server@1.0.0 dev
+> tsx watch src/index.ts
+
+◇ injected env (2) from ../.env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+Database initialized (server) at /home/scott/Desktop/School Notes/Semester6/PRJ/Assignment/UnitedTransit/server/data/transit.db
+Server running on port 3000
+[Transit Route] apiKey loaded: true (AIzaSyCgQI...)
+[Transit Route] Loaded 0 GTFS routes
+[Transit Route] mode=any pref=less_walking summary="" types=, key=BUS:|BUS:
+[Transit Route] mode=any pref=fewer_transfers summary="" types=, key=BUS:|BUS:
+[Transit Route] mode=bus pref=less_walking summary="" types=,,, key=BUS:|BUS:|BUS:|BUS:
+[Transit Route] mode=bus pref=fewer_transfers summary="" types=,,, key=BUS:|BUS:|BUS:|BUS:
+[Transit Route] mode=subway pref=less_walking summary="" types=, key=BUS:|BUS:
+[Transit Route] mode=subway pref=fewer_transfers summary="" types=, key=BUS:|BUS:
+[Transit Route] mode=train pref=less_walking summary="" types=, key=BUS:|BUS:
+[Transit Route] mode=train pref=fewer_transfers summary="" types=, key=BUS:|BUS:
+[Transit Route] mode=tram pref=less_walking summary="" types=, key=BUS:|BUS:
+[Transit Route] mode=tram pref=fewer_transfers summary="" types=, key=BUS:|BUS:
+[Transit Route] mode=rail pref=less_walking summary="" types=, key=BUS:|BUS:
+[Transit Route] mode=rail pref=fewer_transfers summary="" types=, key=BUS:|BUS:
+[Transit Route] Combined 2 unique transit route(s)
+[Transit Route] Transit line data: {"short_name":"53","name":"Steeles East","longName":"Steeles East","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"1","name":"Yonge - University","longName":"Yonge - University","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"53B","name":"Steeles East","longName":"Steeles East","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"925","name":"Don Mills Express","longName":"Don Mills Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"2","name":"Line 2 Bloor–Danforth","longName":"Line 2 Bloor–Danforth","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"75","name":"Sherbourne","longName":"Sherbourne","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] apiKey loaded: true (AIzaSyCgQI...)
+[Transit Route] Multi-stop route with 1 waypoint(s)
+[Transit Route] Loaded 0 GTFS routes
+[Transit Route] Fetching segment 1: (43.8057,-79.3831) -> (43.6544,-79.3807)
+[Transit Route] Transit line data: {"short_name":"53","name":"Steeles East","longName":"Steeles East","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"1","name":"Yonge - University","longName":"Yonge - University","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"53","name":"Steeles East","longName":"Steeles East","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"97A","name":"Yonge","longName":"Yonge","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"97C","name":"Yonge","longName":"Yonge","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Fetching segment 2: (43.6544,-79.3807) -> (43.6605,-79.3746)
+[Transit Route] Transit line data: {"short_name":"505","name":"Dundas","longName":"Dundas","vehicleType":"TRAM","agencyName":"TTC"}
+[Transit Route] apiKey loaded: true (AIzaSyCgQI...)
+[Transit Route] Loaded 0 GTFS routes
+[Transit Route] mode=any pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=any pref=fewer_transfers summary="" types= key=BUS:
+[Transit Route] mode=bus pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=bus pref=fewer_transfers summary="Yonge St and Gerrard St E" types= key=
+[Transit Route] mode=subway pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=subway pref=fewer_transfers summary="Yonge St and Gerrard St E" types= key=
+[Transit Route] mode=train pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=train pref=fewer_transfers summary="Yonge St and Gerrard St E" types= key=
+[Transit Route] mode=tram pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=tram pref=fewer_transfers summary="" types= key=BUS:
+[Transit Route] mode=rail pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=rail pref=fewer_transfers summary="" types= key=BUS:
+[Transit Route] Combined 2 unique transit route(s)
+[Transit Route] Transit line data: {"short_name":"505","name":"Dundas","longName":"Dundas","vehicleType":"TRAM","agencyName":"TTC"}
+3:44:40 p.m. [tsx] unlink in ./src/routes/user_routes.ts Restarting...
+c◇ injected env (2) from ../.env // tip: ⌁ auth for agents [www.vestauth.com]
+Database initialized (server) at /home/scott/Desktop/School Notes/Semester6/PRJ/Assignment/UnitedTransit/server/data/transit.db
+Server running on port 3000
+3:44:54 p.m. [tsx] change in ./src/services/nvasService.ts Restarting...
+c◇ injected env (2) from ../.env // tip: ◈ secrets for agents [www.dotenvx.com]
+Database initialized (server) at /home/scott/Desktop/School Notes/Semester6/PRJ/Assignment/UnitedTransit/server/data/transit.db
+Server running on port 3000
+[Transit Route] apiKey loaded: true (AIzaSyCgQI...)
+[Transit Route] Loaded 0 GTFS routes
+[Transit Route] mode=any pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=any pref=fewer_transfers summary="" types= key=BUS:
+[Transit Route] mode=bus pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=bus pref=fewer_transfers summary="Yonge St and Gerrard St E" types= key=
+[Transit Route] mode=subway pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=subway pref=fewer_transfers summary="Yonge St and Gerrard St E" types= key=
+[Transit Route] mode=train pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=train pref=fewer_transfers summary="Yonge St and Gerrard St E" types= key=
+[Transit Route] mode=tram pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=tram pref=fewer_transfers summary="" types= key=BUS:
+[Transit Route] mode=rail pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=rail pref=fewer_transfers summary="" types= key=BUS:
+[Transit Route] Combined 2 unique transit route(s)
+[Transit Route] Transit line data: {"short_name":"505","name":"Dundas","longName":"Dundas","vehicleType":"TRAM","agencyName":"TTC"}
+[Transit Route] apiKey loaded: true (AIzaSyCgQI...)
+[Transit Route] Loaded 0 GTFS routes
+[Transit Route] mode=any pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=any pref=fewer_transfers summary="" types= key=BUS:
+[Transit Route] mode=bus pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=bus pref=fewer_transfers summary="Yonge St and Gerrard St E" types= key=
+[Transit Route] mode=subway pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=subway pref=fewer_transfers summary="Yonge St and Gerrard St E" types= key=
+[Transit Route] mode=train pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=train pref=fewer_transfers summary="Yonge St and Gerrard St E" types= key=
+[Transit Route] mode=tram pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=tram pref=fewer_transfers summary="" types= key=BUS:
+[Transit Route] mode=rail pref=less_walking summary="" types= key=BUS:
+[Transit Route] mode=rail pref=fewer_transfers summary="" types= key=BUS:
+[Transit Route] Combined 2 unique transit route(s)
+[Transit Route] Transit line data: {"short_name":"505","name":"Dundas","longName":"Dundas","vehicleType":"TRAM","agencyName":"TTC"}
+[Transit Route] apiKey loaded: true (AIzaSyCgQI...)
+[Transit Route] Multi-stop route with 1 waypoint(s)
+[Transit Route] Loaded 0 GTFS routes
+[Transit Route] Fetching segment 1: (43.6544,-79.3807) -> (43.7960,-79.3486)
+[Transit Route] Transit line data: {"short_name":"1","name":"Yonge - University","longName":"Yonge - University","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"939C","name":"Finch Express","longName":"Finch Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"97C","name":"Yonge","longName":"Yonge","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"11A","name":"Bayview","longName":"Bayview","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"939B","name":"Finch Express","longName":"Finch Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"RH","name":"Richmond Hill","longName":"Richmond Hill","vehicleType":"HEAVY_RAIL","agencyName":"GO Transit"}
+[Transit Route] Fetching segment 2: (43.7960,-79.3486) -> (43.6605,-79.3746)
+[Transit Route] Transit line data: {"short_name":"939C","name":"Finch Express","longName":"Finch Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"1","name":"Yonge - University","longName":"Yonge - University","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"925","name":"Don Mills Express","longName":"Don Mills Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"2","name":"Line 2 Bloor–Danforth","longName":"Line 2 Bloor–Danforth","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"75","name":"Sherbourne","longName":"Sherbourne","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] apiKey loaded: true (AIzaSyCgQI...)
+[Transit Route] Multi-stop route with 1 waypoint(s)
+[Transit Route] Loaded 0 GTFS routes
+[Transit Route] Fetching segment 1: (43.6544,-79.3807) -> (43.7960,-79.3486)
+[Transit Route] Transit line data: {"short_name":"1","name":"Yonge - University","longName":"Yonge - University","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"939C","name":"Finch Express","longName":"Finch Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"97C","name":"Yonge","longName":"Yonge","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"11A","name":"Bayview","longName":"Bayview","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"939B","name":"Finch Express","longName":"Finch Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"RH","name":"Richmond Hill","longName":"Richmond Hill","vehicleType":"HEAVY_RAIL","agencyName":"GO Transit"}
+[Transit Route] Fetching segment 2: (43.7960,-79.3486) -> (43.6605,-79.3746)
+[Transit Route] Transit line data: {"short_name":"939C","name":"Finch Express","longName":"Finch Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"1","name":"Yonge - University","longName":"Yonge - University","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"925","name":"Don Mills Express","longName":"Don Mills Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"2","name":"Line 2 Bloor–Danforth","longName":"Line 2 Bloor–Danforth","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"75","name":"Sherbourne","longName":"Sherbourne","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] apiKey loaded: true (AIzaSyCgQI...)
+[Transit Route] Multi-stop route with 1 waypoint(s)
+[Transit Route] Loaded 0 GTFS routes
+[Transit Route] Fetching segment 1: (43.6544,-79.3807) -> (43.7960,-79.3486)
+[Transit Route] Transit line data: {"short_name":"1","name":"Yonge - University","longName":"Yonge - University","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"939C","name":"Finch Express","longName":"Finch Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"97C","name":"Yonge","longName":"Yonge","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"11A","name":"Bayview","longName":"Bayview","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"939B","name":"Finch Express","longName":"Finch Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"RH","name":"Richmond Hill","longName":"Richmond Hill","vehicleType":"HEAVY_RAIL","agencyName":"GO Transit"}
+[Transit Route] Fetching segment 2: (43.7960,-79.3486) -> (43.6605,-79.3746)
+[Transit Route] Transit line data: {"short_name":"939C","name":"Finch Express","longName":"Finch Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"1","name":"Yonge - University","longName":"Yonge - University","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"925","name":"Don Mills Express","longName":"Don Mills Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"2","name":"Line 2 Bloor–Danforth","longName":"Line 2 Bloor–Danforth","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"75","name":"Sherbourne","longName":"Sherbourne","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] apiKey loaded: true (AIzaSyCgQI...)
+[Transit Route] Multi-stop route with 1 waypoint(s)
+[Transit Route] Loaded 0 GTFS routes
+[Transit Route] Fetching segment 1: (43.6544,-79.3807) -> (43.7960,-79.3486)
+[Transit Route] Transit line data: {"short_name":"1","name":"Yonge - University","longName":"Yonge - University","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"939C","name":"Finch Express","longName":"Finch Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"97C","name":"Yonge","longName":"Yonge","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"11A","name":"Bayview","longName":"Bayview","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"939B","name":"Finch Express","longName":"Finch Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"RH","name":"Richmond Hill","longName":"Richmond Hill","vehicleType":"HEAVY_RAIL","agencyName":"GO Transit"}
+[Transit Route] Fetching segment 2: (43.7960,-79.3486) -> (43.6605,-79.3746)
+[Transit Route] Transit line data: {"short_name":"39","name":"Finch East","longName":"Finch East","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"1","name":"Yonge - University","longName":"Yonge - University","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"925","name":"Don Mills Express","longName":"Don Mills Express","vehicleType":"BUS","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"2","name":"Line 2 Bloor–Danforth","longName":"Line 2 Bloor–Danforth","vehicleType":"SUBWAY","agencyName":"TTC"}
+[Transit Route] Transit line data: {"short_name":"75","name":"Sherbourne","longName":"Sherbourne","vehicleType":"BUS","agencyName":"TTC"}
